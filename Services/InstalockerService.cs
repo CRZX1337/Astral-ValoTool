@@ -19,6 +19,10 @@ public sealed class InstalockerService
     private static readonly IReadOnlyDictionary<string, ValorantTables.Agent> AgentLookup = BuildAgentLookup();
     private static readonly IReadOnlyList<AgentOption> Agents = BuildAgents();
     private static readonly IReadOnlyList<string> MapNames = BuildMapNames();
+    private static readonly IReadOnlyDictionary<string, string> MapNameLookup = BuildMapNameLookup();
+
+    /// <summary>Shown when pre-game reports a map that cannot be identified at all.</summary>
+    private const string UnknownMapName = "the current map";
 
     private readonly OptionsStore _optionsStore;
     private readonly object _sync = new();
@@ -336,14 +340,61 @@ public sealed class InstalockerService
         return AgentLookup.TryGetValue(Normalize(input), out agent);
     }
 
+    /// <summary>
+    /// Turns whatever pre-game reports into a display name.
+    ///
+    /// Riot sends the map as a content path ("/Game/Maps/Ascent/Ascent"), while
+    /// RadiantConnect's table is keyed by the bare codename ("Ascent", "Bonsai")
+    /// and by uuid -- and its dictionary is case sensitive. A direct lookup of
+    /// the raw value therefore misses, which silently defeated every map
+    /// override. Try the value as sent, then its last path segment, against a
+    /// case-insensitive copy of the table.
+    /// </summary>
     private static string ResolveMapName(string? mapId)
     {
         if (string.IsNullOrWhiteSpace(mapId))
         {
-            return "the current map";
+            return UnknownMapName;
         }
 
-        return ValorantTables.InternalMapNames.TryGetValue(mapId, out string? name) ? name : "the current map";
+        string trimmed = mapId.Trim();
+
+        if (MapNameLookup.TryGetValue(trimmed, out string? direct))
+        {
+            return direct;
+        }
+
+        string segment = LastSegment(trimmed);
+
+        if (segment.Length > 0 && MapNameLookup.TryGetValue(segment, out string? bySegment))
+        {
+            return bySegment;
+        }
+
+        // A map this build's table does not know yet: show the codename rather
+        // than a generic placeholder, so an unmatched override is diagnosable.
+        return segment.Length > 0 ? segment : UnknownMapName;
+    }
+
+    private static string LastSegment(string value)
+    {
+        int slash = value.LastIndexOf('/');
+        return slash >= 0 ? value[(slash + 1)..] : value;
+    }
+
+    private static IReadOnlyDictionary<string, string> BuildMapNameLookup()
+    {
+        Dictionary<string, string> lookup = new(StringComparer.OrdinalIgnoreCase);
+
+        foreach ((string key, string value) in ValorantTables.InternalMapNames)
+        {
+            if (!string.IsNullOrWhiteSpace(key) && !string.IsNullOrWhiteSpace(value))
+            {
+                lookup[key] = value;
+            }
+        }
+
+        return lookup;
     }
 
     private static IReadOnlyList<string> BuildMapNames()
