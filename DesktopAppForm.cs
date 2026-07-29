@@ -11,13 +11,21 @@ public sealed class DesktopAppForm : Form
     /// <summary>NotifyIcon.Text is capped by the shell; longer values throw.</summary>
     private const int MaxTrayTextLength = 63;
 
+    private static readonly string BrowserDataFolder = ResolveBrowserDataFolder();
+
     private readonly string _url;
     private readonly InstalockerService _service;
     private readonly Icon? _appIcon = LoadAppIcon();
     private readonly NotifyIcon _tray;
     private readonly WebView2 _webView = new()
     {
-        Dock = DockStyle.Fill
+        Dock = DockStyle.Fill,
+
+        // Must be assigned before initialization begins.
+        CreationProperties = new CoreWebView2CreationProperties
+        {
+            UserDataFolder = BrowserDataFolder
+        }
     };
 
     private bool _exitRequested;
@@ -175,10 +183,35 @@ public sealed class DesktopAppForm : Form
         return stream is null ? null : new Icon(stream);
     }
 
+    /// <summary>
+    /// Where the embedded browser keeps its profile. Left unset, WebView2 puts
+    /// "{executable}.WebView2" next to the binary -- clutter beside a portable
+    /// build, and an outright startup failure when that directory is not
+    /// writable, such as a copy under Program Files.
+    ///
+    /// Deliberately local rather than roaming: a browser cache must not
+    /// synchronise with a domain profile the way the small settings file may.
+    /// </summary>
+    private static string ResolveBrowserDataFolder()
+    {
+        string root = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+        if (string.IsNullOrWhiteSpace(root))
+        {
+            root = Path.GetTempPath();
+        }
+
+        return Path.Combine(root, "Astral", "WebView2");
+    }
+
     private async Task InitializeWebViewAsync()
     {
         try
         {
+            // Inside the try on purpose: an unwritable profile location should
+            // land on the error screen, not abort construction of the window.
+            Directory.CreateDirectory(BrowserDataFolder);
+
             await _webView.EnsureCoreWebView2Async();
             _webView.Source = new Uri(_url);
         }

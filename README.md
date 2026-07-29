@@ -35,6 +35,7 @@ It runs as a standalone C# application that pairs an embedded ASP.NET Core Web A
 - **Valorant Client Interface:** [RadiantConnect](https://github.com/RadiantConnect) (v10.6.1)
 - **Frontend UI:** Vanilla HTML5, CSS, and JavaScript (served via embedded `wwwroot` files)
 - **Persistence:** `%APPDATA%\Astral\settings.json` for user overrides, backed by `appsettings.json` defaults
+- **Portable:** nothing is written next to the executable — the embedded browser keeps its profile in `%LOCALAPPDATA%\Astral\WebView2`
 
 ---
 
