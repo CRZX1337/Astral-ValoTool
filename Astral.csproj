@@ -22,8 +22,7 @@
     <Description>Watches VALORANT pre-game and locks your chosen agent, with per-map overrides, adjustable timing and a local API.</Description>
     <Authors>CRZX1337</Authors>
     <Company>CRZX1337</Company>
-    <!-- The upstream notice stays: MIT requires it regardless of the fork name. -->
-    <Copyright>MIT licensed. Copyright (c) 2026 Sysy's, CRZX1337.</Copyright>
+    <Copyright>MIT licensed. Copyright (c) 2026 CRZX1337.</Copyright>
   </PropertyGroup>
 
   <ItemGroup>
