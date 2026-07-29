@@ -51,8 +51,8 @@ It runs as a standalone C# application that pairs an embedded ASP.NET Core Web A
 
 1. Clone the repository:
    ```powershell
-   git clone https://github.com/CRZX1337/Valorant-Instalocker-API.git
-   cd Valorant-Instalocker-API
+   git clone https://github.com/CRZX1337/Astral-ValoTool.git
+   cd Astral-ValoTool
    ```
 
 2. Build and run in debug or release mode:
@@ -62,9 +62,15 @@ It runs as a standalone C# application that pairs an embedded ASP.NET Core Web A
 
 3. (Optional) Publish a standalone executable:
    ```powershell
-   dotnet publish -c Release -r win-x64 --self-contained
+   dotnet publish -p:PublishProfile=SingleFile
    ```
-   The compiled output will be generated under `bin\Release\net10.0-windows\win-x64\publish\`.
+   This uses the profile shipped in `Properties\PublishProfiles\`, which compresses the runtime, the
+   frontend and the WebView2 loader into a single self-contained `Astral.exe` (~62 MB) under
+   `bin\Publish\SingleFile\`. That one file is all you need to ship — the `.pdb` and `web.config`
+   written next to it are not required to run.
+
+   A plain `dotnet publish -c Release -r win-x64 --self-contained` also works, but leaves the runtime
+   spread across a folder of loose assemblies instead.
 
 ---
 
@@ -73,14 +79,26 @@ It runs as a standalone C# application that pairs an embedded ASP.NET Core Web A
 ### Desktop Interface
 
 1. Start **Astral.exe** before or during a Valorant session.
-2. Select your main agent from the grid or dropdown.
+2. Select your main agent from the grid — press `/` to jump to the search box.
 3. Configure any per-map agent overrides if you play different agents on different maps.
 4. Click **Start Locking**. Astral will monitor your local game client and trigger the selection when pre-game starts.
 5. You can safely close the window — it will minimize to the notification tray and keep running.
 
 ### API Endpoints
 
-Astral binds Kestrel to a local loopback port on startup. You can trigger or monitor agent locks programmatically:
+Astral binds Kestrel to a random loopback port on startup — `127.0.0.1` only, never reachable from
+the network. You can trigger or monitor agent locks programmatically:
+
+| Route | Purpose |
+|---|---|
+| `GET /api/agents` | Agent list from the local RadiantConnect enum |
+| `GET /api/agent-assets` | The same list enriched with portraits, roles and colours |
+| `GET /api/state` | Current lock state |
+| `GET /api/state/stream` | The same state pushed on every change (SSE) |
+| `POST /api/lock` | Start monitoring, or re-aim a running loop at another agent |
+| `POST /api/stop` | Stop monitoring |
+| `GET /api/options` | Settings plus the list of maps they can refer to |
+| `PATCH /api/options` | Partial settings update, validated and persisted |
 
 #### Start or Change Target Agent
 ```http
@@ -105,13 +123,17 @@ GET /api/state
 Response format:
 ```json
 {
-  "active": true,
+  "isRunning": true,
   "isLocked": false,
   "selectedAgent": "Jett",
   "status": "Waiting for pre-game.",
-  "error": null
+  "error": null,
+  "updatedAt": "2026-07-29T15:44:03.7543142+00:00"
 }
 ```
+
+`isRunning` means the monitoring loop is active; `isLocked` is only true during the brief window
+after a successful lock, for as long as the *Show Locked for* setting keeps it there.
 
 #### Real-Time SSE Stream
 ```http
@@ -195,6 +217,7 @@ This project is licensed under the [MIT License](LICENSE).
 
 ## Disclaimer & Credits
 
-- Built using [RadiantConnect](https://github.com/RadiantConnect) for local Valorant client API communication.
+- Astral builds on [Askin242/Valorant-Instalocker-API](https://github.com/Askin242/Valorant-Instalocker-API) by [Sysy's](https://github.com/Askin242), whose C# implementation the pre-game lock loop still comes from — originally inspired by [SuppliedOrange](https://github.com/SuppliedOrange).
+- Built using [RadiantConnect](https://github.com/RadiantConnect) ([project site](https://radiantconnect.ca/)) for local Valorant client API communication.
 - Agent assets and icons provided by [Valorant-API](https://valorant-api.com/).
 - **Astral** is not affiliated with, endorsed by, or sponsored by Riot Games, Inc. Valorant is a registered trademark of Riot Games, Inc. Use at your own discretion.
