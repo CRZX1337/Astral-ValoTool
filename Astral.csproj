@@ -12,6 +12,20 @@
     <ApplicationIcon>images\app.ico</ApplicationIcon>
   </PropertyGroup>
 
+  <!-- Identity baked into the Win32 version resource: this is what the file's
+       Properties dialog, Task Manager and SmartScreen prompts show, so a
+       downloaded release does not look anonymous. -->
+  <PropertyGroup>
+    <Version>1.0.0</Version>
+    <Product>Astral</Product>
+    <AssemblyTitle>Astral - VALORANT agent instalocker</AssemblyTitle>
+    <Description>Watches VALORANT pre-game and locks your chosen agent, with per-map overrides, adjustable timing and a local API.</Description>
+    <Authors>CRZX1337</Authors>
+    <Company>CRZX1337</Company>
+    <!-- The upstream notice stays: MIT requires it regardless of the fork name. -->
+    <Copyright>MIT licensed. Copyright (c) 2026 Sysy's, CRZX1337.</Copyright>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.FileProviders.Embedded" Version="10.0.0" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2957.106" GeneratePathProperty="true" ExcludeAssets="all" />
