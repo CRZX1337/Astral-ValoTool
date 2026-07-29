@@ -17,6 +17,12 @@ public sealed class DesktopAppForm : Form
     private readonly InstalockerService _service;
     private readonly Icon? _appIcon = LoadAppIcon();
     private readonly NotifyIcon _tray;
+
+    /// <summary>
+    /// Only in the menu while the loop is actually running -- offering "Stop"
+    /// when nothing was ever started is an action that cannot do anything.
+    /// </summary>
+    private readonly ToolStripMenuItem _stopItem = new("Stop locking") { Available = false };
     private readonly WebView2 _webView = new()
     {
         Dock = DockStyle.Fill,
@@ -51,7 +57,7 @@ public sealed class DesktopAppForm : Form
         BackColor = Color.FromArgb(11, 11, 15);
 
         _tray = CreateTray();
-        ApplyTrayText(_service.GetState());
+        ApplyTrayState(_service.GetState());
         _service.StateChanged += OnServiceStateChanged;
 
         Controls.Add(_webView);
@@ -105,8 +111,10 @@ public sealed class DesktopAppForm : Form
             BackColor = Color.FromArgb(18, 20, 27)
         };
 
+        _stopItem.Click += (_, _) => _service.Stop("Stopped from the tray.");
+
         menu.Items.Add("Open", null, (_, _) => RestoreWindow());
-        menu.Items.Add("Stop locking", null, (_, _) => _service.Stop("Stopped from the tray."));
+        menu.Items.Add(_stopItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => ExitApplication());
 
@@ -164,11 +172,13 @@ public sealed class DesktopAppForm : Form
             return;
         }
 
-        BeginInvoke(() => ApplyTrayText(state));
+        BeginInvoke(() => ApplyTrayState(state));
     }
 
-    private void ApplyTrayText(LockState state)
+    private void ApplyTrayState(LockState state)
     {
+        _stopItem.Available = state.IsRunning;
+
         string status = state.Error ?? state.Status;
         string text = $"Astral — {status}";
 
