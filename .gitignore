@@ -3,3 +3,4 @@ obj/
 _upstream_instalocker/
 _upstream_radiantconnect/
 publish/
+.claude/

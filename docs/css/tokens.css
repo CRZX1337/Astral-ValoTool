@@ -1,0 +1,166 @@
+@layer tokens, base, glass, sections, motion;
+
+/* ==========================================================================
+   Astral site -- design tokens
+   Ported from wwwroot/styles.css so the site and the app share one palette.
+   Anything added for the site only is grouped under "Site additions".
+   ========================================================================== */
+
+@layer tokens {
+  :root {
+    color-scheme: dark;
+
+    /* --- App tokens, verbatim ------------------------------------------- */
+    --bg-0: #07080b;
+    --bg-1: #0d0f14;
+
+    --surface: rgba(255, 255, 255, 0.045);
+    --surface-raised: rgba(255, 255, 255, 0.065);
+    --hairline: rgba(255, 255, 255, 0.09);
+    --hairline-strong: rgba(255, 255, 255, 0.18);
+
+    --text: #f1f2f6;
+    --text-muted: #9aa1b0;
+    --text-dim: #6a7183;
+
+    --bad: #ff5a68;
+    --bad-soft: rgba(255, 90, 104, 0.12);
+
+    --ambient-a: rgba(108, 122, 255, 0.20);
+    --ambient-b: rgba(255, 90, 104, 0.13);
+
+    --blur: blur(22px) saturate(140%);
+    --shadow: 0 18px 44px rgba(0, 0, 0, 0.45);
+    --ease: cubic-bezier(0.22, 0.68, 0.35, 1);
+
+    /* --- Site additions ------------------------------------------------- */
+
+    /* Brand blue, sampled from images/logo.png. */
+    --brand: #5bb5ff;
+    --brand-deep: #47a5ff;
+    --brand-glow: rgba(91, 181, 255, 0.38);
+
+    --bg-2: #101219;
+
+    /* Glass speculars. The top light-catch is what actually sells it. */
+    --spec-top: rgba(255, 255, 255, 0.42);
+    --spec-bottom: rgba(255, 255, 255, 0.10);
+    --spec-side: rgba(255, 255, 255, 0.06);
+
+    --radius-sm: 10px;
+    --radius: 16px;
+    --radius-lg: 22px;
+    --radius-xl: 30px;
+
+    --shadow-sm: 0 8px 22px rgba(0, 0, 0, 0.35);
+    --shadow-lg: 0 34px 90px rgba(0, 0, 0, 0.55);
+
+    /* Fluid rhythm. Section padding and gutters scale with the viewport so
+       375px and 1440px both get sensible whitespace without breakpoints. */
+    --gutter: clamp(1.15rem, 4vw, 3rem);
+    --section-y: clamp(4.5rem, 11vh, 8.5rem);
+    --measure: 62ch;
+    --shell: 1180px;
+
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+    --dur: 620ms;
+
+    --font: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system,
+      Roboto, "Helvetica Neue", sans-serif;
+    --font-mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas,
+      "Liberation Mono", monospace;
+  }
+
+  /* Role accents. Same values and same `data-role` contract as the app, so
+     markup can be lifted between the two without translation. */
+  [data-role="duelist"] {
+    --accent: #ff5a68;
+    --accent-soft: rgba(255, 90, 104, 0.15);
+    --accent-glow: rgba(255, 90, 104, 0.42);
+  }
+
+  [data-role="initiator"] {
+    --accent: #f5c451;
+    --accent-soft: rgba(245, 196, 81, 0.15);
+    --accent-glow: rgba(245, 196, 81, 0.40);
+  }
+
+  [data-role="controller"] {
+    --accent: #a97bff;
+    --accent-soft: rgba(169, 123, 255, 0.16);
+    --accent-glow: rgba(169, 123, 255, 0.42);
+  }
+
+  [data-role="sentinel"] {
+    --accent: #3ddc97;
+    --accent-soft: rgba(61, 220, 151, 0.14);
+    --accent-glow: rgba(61, 220, 151, 0.38);
+  }
+
+  [data-role="unknown"] {
+    --accent: #8b93a7;
+    --accent-soft: rgba(139, 147, 167, 0.14);
+    --accent-glow: rgba(139, 147, 167, 0.34);
+  }
+
+  [data-role="all"] {
+    --accent: #c9cede;
+    --accent-soft: rgba(201, 206, 222, 0.12);
+    --accent-glow: rgba(201, 206, 222, 0.30);
+  }
+
+  /* Site default so `var(--accent)` is never empty outside a role scope. */
+  :root {
+    --accent: var(--brand);
+    --accent-soft: rgba(91, 181, 255, 0.14);
+    --accent-glow: var(--brand-glow);
+  }
+
+  /* Phase colours, matching the app's status pill. `locked` borrows the
+     agent's own accent, exactly as the app does. */
+  [data-phase="booting"],
+  [data-phase="offline"],
+  [data-phase="idle"] {
+    --phase: #7d8496;
+    --phase-soft: rgba(125, 132, 150, 0.28);
+  }
+
+  [data-phase="arming"] {
+    --phase: #f5c451;
+    --phase-soft: rgba(245, 196, 81, 0.30);
+  }
+
+  [data-phase="monitoring"] {
+    --phase: #3ddc97;
+    --phase-soft: rgba(61, 220, 151, 0.30);
+  }
+
+  [data-phase="locked"] {
+    --phase: var(--accent, #5bb5ff);
+    --phase-soft: var(--accent-soft, rgba(91, 181, 255, 0.28));
+  }
+
+  [data-phase="error"] {
+    --phase: var(--bad);
+    --phase-soft: var(--bad-soft);
+  }
+
+  /* Rotating rim angle for the glass edge highlight. Registered so it can be
+     animated -- plain custom properties are not interpolatable. */
+  @property --angle {
+    syntax: "<angle>";
+    inherits: false;
+    initial-value: 0deg;
+  }
+
+  /* Higher-contrast preference: firm up hairlines, retire the dim tier. */
+  @media (prefers-contrast: more) {
+    :root {
+      --hairline: rgba(255, 255, 255, 0.22);
+      --hairline-strong: rgba(255, 255, 255, 0.38);
+      --text-muted: #d3d7e0;
+      --text-dim: #b0b6c4;
+    }
+  }
+}

@@ -6,6 +6,8 @@ Lock your Valorant agent before anyone else in the lobby finishes loading.
 ![Framework: .NET 10](https://img.shields.io/badge/Framework-.NET%2010.0-purple.svg)
 ![Platform: Windows](https://img.shields.io/badge/Platform-Windows-0078D6.svg)
 
+**[astral website →](https://crzx1337.github.io/Astral-ValoTool/)** · [download Astral.exe](https://github.com/CRZX1337/Astral-ValoTool/releases/latest)
+
 ---
 
 ## 🎉 What it does

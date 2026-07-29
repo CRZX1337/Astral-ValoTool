@@ -1,0 +1,237 @@
+/* ==========================================================================
+   Motion
+   Tier A: IntersectionObserver adds .is-in, CSS transitions do the work.
+   Tier B: scroll-driven animations where supported, purely additive.
+   Tier C: pointer effects, gated in JS on (hover: hover) and (pointer: fine).
+   ========================================================================== */
+
+@layer motion {
+  /* --- Keyframes -------------------------------------------------------- */
+
+  @keyframes rim-spin {
+    to {
+      --angle: 360deg;
+    }
+  }
+
+  @keyframes pulse-ring {
+    0% {
+      box-shadow: 0 0 0 0 currentColor;
+      opacity: 1;
+    }
+    70% {
+      box-shadow: 0 0 0 6px transparent;
+      opacity: 0.85;
+    }
+    100% {
+      box-shadow: 0 0 0 0 transparent;
+      opacity: 1;
+    }
+  }
+
+  @keyframes drift {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+    50% {
+      transform: translate3d(2%, -3%, 0) scale(1.06);
+    }
+  }
+
+  @keyframes float-y {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0) rotateX(8deg) rotateZ(-3deg);
+    }
+    50% {
+      transform: translate3d(0, -14px, 0) rotateX(4deg) rotateZ(2deg);
+    }
+  }
+
+  @keyframes shimmer {
+    to {
+      background-position: 200% 0;
+    }
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes radar {
+    0% {
+      transform: rotate(0deg);
+      opacity: 0.85;
+    }
+    100% {
+      transform: rotate(360deg);
+      opacity: 0.85;
+    }
+  }
+
+  @keyframes scan {
+    0% {
+      transform: translateY(-100%);
+    }
+    100% {
+      transform: translateY(400%);
+    }
+  }
+
+  /* Cycles the demo status card through the app's real phase colours. */
+  @keyframes phase-cycle {
+    0%,
+    18% {
+      opacity: 1;
+    }
+    26%,
+    100% {
+      opacity: 0;
+    }
+  }
+
+  /* --- Tier A: scroll reveals ------------------------------------------- */
+
+  /* Visible is the default state, deliberately. The hidden state is gated on
+     html.reveal-ready, which reveal.js only sets once it has successfully
+     built the observer and started watching every target. So if scripting is
+     off, blocked, throws, or IntersectionObserver is missing, the page renders
+     fully visible instead of as a blank screen. */
+  .reveal {
+    transition:
+      opacity var(--dur) var(--ease),
+      transform var(--dur) var(--ease);
+    /* --i is set inline per child so a group staggers without n-th rules. */
+    transition-delay: calc(var(--i, 0) * 55ms);
+  }
+
+  .reveal-ready .reveal:not(.is-in) {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0) scale(0.985);
+    will-change: opacity, transform;
+  }
+
+  /* --- Tier B: scroll-driven ------------------------------------------- */
+  /* Compositor-driven, so the hero layers keep up under load. Nothing depends
+     on this -- tier A is the floor and these elements are already visible. */
+
+  @supports (animation-timeline: view()) {
+    @keyframes layer-rise {
+      to {
+        transform: translate3d(0, -90px, 0);
+      }
+    }
+
+    @keyframes layer-sink {
+      to {
+        transform: translate3d(0, 46px, 0);
+      }
+    }
+
+    @keyframes shot-settle {
+      from {
+        transform: perspective(1400px) rotateY(11deg) rotateX(5deg) scale(0.94);
+      }
+      to {
+        transform: perspective(1400px) rotateY(0deg) rotateX(0deg) scale(1);
+      }
+    }
+
+    .parallax-slow {
+      animation: layer-sink linear both;
+      animation-timeline: scroll(root);
+      animation-range: 0 80vh;
+    }
+
+    .parallax-fast {
+      animation: layer-rise linear both;
+      animation-timeline: scroll(root);
+      animation-range: 0 90vh;
+    }
+
+    .shot-frame {
+      animation: shot-settle linear both;
+      animation-timeline: view();
+      animation-range: entry 10% cover 45%;
+    }
+  }
+
+  /* --- Tier C: pointer tilt -------------------------------------------- */
+  /* Real depth, not a skew: the card keeps preserve-3d and its inner layers
+     sit at genuine translateZ, so children separate as it turns. */
+
+  .tilt {
+    --tx: 0deg;
+    --ty: 0deg;
+    transform: perspective(900px) rotateX(var(--tx)) rotateY(var(--ty));
+    transform-style: preserve-3d;
+    transition: transform 500ms var(--ease-out);
+    /* `isolation: isolate` (set by .glass) and any `overflow` other than
+       visible are grouping properties: they force transform-style back to
+       flat, which would silently kill the translateZ depth below. The
+       transform already creates a stacking context, so isolate is redundant
+       here anyway. Do not add overflow clipping to a .tilt element. */
+    isolation: auto;
+    overflow: visible;
+  }
+
+  .tilt.is-tilting {
+    /* While the pointer drives it, drop the transition or it lags the cursor. */
+    transition: none;
+  }
+
+  .tilt-lift {
+    transform: translateZ(28px);
+    transform-style: preserve-3d;
+  }
+
+  .tilt-lift-sm {
+    transform: translateZ(10px);
+  }
+
+  /* --- Reduced motion --------------------------------------------------- */
+  /* Same contract as the app (wwwroot/styles.css §9): keep transitions
+     technically alive so :hover states still settle, but make them
+     instantaneous, and never leave revealed content hidden. */
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      transition-delay: 0ms !important;
+      scroll-behavior: auto !important;
+    }
+
+    .reveal {
+      opacity: 1;
+      transform: none;
+    }
+
+    .tilt {
+      transform: none;
+    }
+
+    .tilt-lift,
+    .tilt-lift-sm {
+      transform: none;
+    }
+
+    .aurora span {
+      animation: none;
+    }
+
+    .hero-logo-fallback {
+      animation: none;
+    }
+  }
+}

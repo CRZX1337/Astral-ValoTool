@@ -46,6 +46,10 @@
     <Content Remove="_upstream_instalocker\**" />
     <Content Remove="_upstream_radiantconnect\**" />
     <Content Remove="wwwroot\**\*" />
+    <!-- The GitHub Pages site. The Web SDK's default globs would otherwise
+         sweep its files into the published app. -->
+    <Content Remove="docs\**" />
+    <None Remove="docs\**" />
     <EmbeddedResource Remove="_upstream_instalocker\**" />
     <EmbeddedResource Remove="_upstream_radiantconnect\**" />
     <None Remove="_upstream_instalocker\**" />
