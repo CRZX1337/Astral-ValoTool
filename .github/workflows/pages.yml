@@ -1,0 +1,50 @@
+name: Deploy site to GitHub Pages
+
+# The Pages source is set to "GitHub Actions", so the deploy has to come from
+# here. Only the docs/ folder is published -- the C# app is not part of it.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - ".github/workflows/pages.yml"
+  # Lets the site be redeployed by hand without an empty commit.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deploys race. Queue rather than cancel, so a run that is
+# already publishing is allowed to finish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+        with:
+          # Turns Pages on if it has never been enabled for this repo, so the
+          # first run does not need anything clicked in Settings.
+          enablement: true
+
+      - name: Upload docs/ as the site artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+      - name: Deploy
+        id: deploy
+        uses: actions/deploy-pages@v4
