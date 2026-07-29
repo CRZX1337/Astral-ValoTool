@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Astral</title>
+  <link rel="icon" href="/logo.png">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body data-phase="booting" data-role="unknown">
+  <div class="ambient" aria-hidden="true"></div>
+
+  <div class="app">
+    <header class="topbar glass">
+      <div class="brand">
+        <img class="brand-mark" src="/logo.png" alt="" width="34" height="34" decoding="async">
+        <span class="brand-text">
+          <strong>Valorant</strong>
+          <span>Astral</span>
+        </span>
+      </div>
+
+      <div class="topbar-status">
+        <span class="notice-pill" id="noticePill" hidden>Portraits unavailable</span>
+        <span class="phase-pill">
+          <span class="phase-dot" aria-hidden="true"></span>
+          <span id="phaseLabel">Loading</span>
+        </span>
+        <button class="icon-btn" id="settingsButton" type="button" aria-label="Settings" aria-haspopup="dialog">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54A.48.48 0 0 0 13.9 2h-3.8a.48.48 0 0 0-.47.41l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.47a.48.48 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.8c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <main class="browser">
+      <div class="toolbar glass">
+        <label class="search" for="agentSearch">
+          <svg class="search-icon" viewBox="0 0 20 20" aria-hidden="true">
+            <circle cx="9" cy="9" r="6"></circle>
+            <line x1="13.5" y1="13.5" x2="17.5" y2="17.5"></line>
+          </svg>
+          <input
+            id="agentSearch"
+            type="search"
+            placeholder="Search agents"
+            autocomplete="off"
+            spellcheck="false"
+            aria-label="Search agents">
+          <kbd class="search-key" aria-hidden="true">/</kbd>
+        </label>
+
+        <div class="filters" id="roleFilters" role="group" aria-label="Filter by role"></div>
+        <span class="result-count" id="resultCount"></span>
+      </div>
+
+      <div class="grid-scroll">
+        <div class="agent-grid" id="agentGrid" role="listbox" aria-label="Agents"></div>
+        <p class="grid-empty" id="gridEmpty" hidden><span id="gridEmptyText"></span></p>
+      </div>
+    </main>
+
+    <aside class="panel glass">
+      <div class="hero-art" id="heroArt" data-art="none" data-role="unknown">
+        <img class="hero-backdrop" id="heroBackdrop" alt="" hidden>
+        <img class="hero-portrait" id="heroPortrait" alt="" decoding="async" hidden>
+        <img class="hero-watermark" id="heroWatermark" src="/logo.png" alt="" hidden>
+        <span class="hero-monogram" id="heroMonogram" aria-hidden="true">?</span>
+        <span class="hero-badge" id="heroBadge" hidden>Locked</span>
+      </div>
+
+      <div class="panel-identity">
+        <p class="eyebrow">Target agent</p>
+        <h1 class="panel-name" id="panelName">No agent selected</h1>
+        <span class="role-chip" id="panelRole" data-role="unknown" hidden></span>
+      </div>
+
+      <div class="panel-status">
+        <p class="status-line" id="statusLine" aria-live="polite">Loading agents…</p>
+        <dl class="panel-meta">
+          <div>
+            <dt>Loop</dt>
+            <dd id="metaLoop">Loading</dd>
+          </div>
+          <div>
+            <dt>Updated</dt>
+            <dd id="metaUpdated">—</dd>
+          </div>
+        </dl>
+      </div>
+
+      <p class="panel-alert" id="panelAlert" role="alert" hidden></p>
+
+      <div class="panel-actions">
+        <button class="btn btn-primary" id="startButton" type="button" disabled>
+          <span class="btn-spinner" aria-hidden="true"></span>
+          <span id="startLabel">Start locking</span>
+        </button>
+        <button class="btn btn-ghost" id="stopButton" type="button" disabled>
+          <span class="btn-spinner" aria-hidden="true"></span>
+          <span>Stop</span>
+        </button>
+      </div>
+    </aside>
+  </div>
+
+  <div class="modal" id="settingsModal" hidden>
+    <div class="modal-backdrop" data-close-settings></div>
+
+    <div class="modal-panel glass" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <header class="modal-head">
+        <h2 class="modal-title" id="settingsTitle">Settings</h2>
+        <button class="icon-btn" id="settingsClose" type="button" aria-label="Close settings" data-close-settings>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M18.3 5.71 12 12.01l-6.3-6.3-1.41 1.41 6.3 6.3-6.3 6.3 1.41 1.41 6.3-6.3 6.3 6.3 1.41-1.41-6.3-6.3 6.3-6.3z"></path>
+          </svg>
+        </button>
+      </header>
+
+      <div class="modal-body" id="settingsBody">
+        <p class="settings-loading" id="settingsLoading">Loading settings…</p>
+
+        <section class="setting-group" id="delayGroup" hidden>
+          <h3 class="setting-title">Timing</h3>
+          <p class="setting-hint">How long to wait around the select and lock calls. Zero is as fast as the client allows.</p>
+
+          <div class="slider-row">
+            <span class="slider-label">
+              <label for="hoverDelay">Hover delay</label>
+              <button class="tip-trigger" type="button" aria-label="About hover delay"
+                      data-tip="Pause between pre-game opening and your agent being hovered. Everything after it is delayed too, so this is the one that can cost you a contested pick.">?</button>
+            </span>
+            <input class="slider" id="hoverDelay" type="range" min="0" max="10000" step="50" value="0">
+            <input class="slider-value" id="hoverDelayValue" type="number" min="0" max="10000" step="50" value="0"
+                   aria-label="Hover delay in milliseconds">
+            <span class="slider-unit">ms</span>
+          </div>
+
+          <div class="slider-row">
+            <span class="slider-label">
+              <label for="lockDelay">Lock delay</label>
+              <button class="tip-trigger" type="button" aria-label="About lock delay"
+                      data-tip="Pause between hovering and locking. Your hover is already visible to the lobby during this window, so anyone can still take the agent first.">?</button>
+            </span>
+            <input class="slider" id="lockDelay" type="range" min="0" max="10000" step="50" value="0">
+            <input class="slider-value" id="lockDelayValue" type="number" min="0" max="10000" step="50" value="0"
+                   aria-label="Lock delay in milliseconds">
+            <span class="slider-unit">ms</span>
+          </div>
+        </section>
+
+        <section class="setting-group" id="overrideGroup" hidden>
+          <h3 class="setting-title">Map overrides</h3>
+          <p class="setting-hint">Lock a different agent when pre-game opens on a specific map. Every other map uses the agent picked in the grid.</p>
+
+          <div class="rule-list" id="overrideList"></div>
+          <p class="rule-empty" id="overrideEmpty">No overrides yet.</p>
+
+          <button class="btn btn-quiet" id="addOverride" type="button">+ Add rule</button>
+        </section>
+
+        <section class="setting-group" id="holdGroup" hidden>
+          <h3 class="setting-title">After a lock</h3>
+          <p class="setting-hint">How long the Locked confirmation stays on screen before monitoring resumes. This runs once the lock has already succeeded, so it cannot influence the pick.</p>
+
+          <div class="slider-row">
+            <span class="slider-label">
+              <label for="postLockDelay">Show Locked for</label>
+            </span>
+            <input class="slider" id="postLockDelay" type="range" min="0" max="10000" step="50" value="0">
+            <input class="slider-value" id="postLockDelayValue" type="number" min="0" max="10000" step="50" value="0"
+                   aria-label="Show the Locked state for this many milliseconds">
+            <span class="slider-unit">ms</span>
+          </div>
+        </section>
+      </div>
+
+      <footer class="modal-foot">
+        <p class="save-note" id="settingsNote" role="status"></p>
+        <button class="btn btn-primary btn-compact" id="settingsSave" type="button" disabled>
+          <span class="btn-spinner" aria-hidden="true"></span>
+          <span id="settingsSaveLabel">Save</span>
+        </button>
+      </footer>
+    </div>
+  </div>
+
+  <template id="overrideRowTemplate">
+    <div class="rule-row">
+      <select class="rule-map" aria-label="Map"></select>
+      <span class="rule-arrow" aria-hidden="true">→</span>
+      <select class="rule-agent" aria-label="Agent"></select>
+      <button class="icon-btn rule-remove" type="button" aria-label="Remove rule">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M18.3 5.71 12 12.01l-6.3-6.3-1.41 1.41 6.3 6.3-6.3 6.3 1.41 1.41 6.3-6.3 6.3 6.3 1.41-1.41-6.3-6.3 6.3-6.3z"></path>
+        </svg>
+      </button>
+    </div>
+  </template>
+
+  <template id="agentCardTemplate">
+    <button class="agent-card" type="button" role="option" aria-selected="false">
+      <span class="card-art" data-art="none">
+        <img class="card-portrait" alt="" loading="lazy" decoding="async">
+        <span class="card-monogram" aria-hidden="true"></span>
+      </span>
+      <span class="card-body">
+        <span class="card-name"></span>
+        <span class="card-role"></span>
+      </span>
+      <span class="card-flag" aria-hidden="true"></span>
+    </button>
+  </template>
+
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,57 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <!-- The Web SDK defaults to a console subsystem, which pops a terminal
+         next to the desktop window. -->
+    <OutputType>WinExe</OutputType>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWindowsForms>true</UseWindowsForms>
+    <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
+    <ApplicationIcon>images\app.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.FileProviders.Embedded" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2957.106" GeneratePathProperty="true" ExcludeAssets="all" />
+    <PackageReference Include="RadiantConnect" Version="10.6.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="Microsoft.Web.WebView2.Core">
+      <HintPath>$(PkgMicrosoft_Web_WebView2)\lib_manual\netcoreapp3.0\Microsoft.Web.WebView2.Core.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Web.WebView2.WinForms">
+      <HintPath>$(PkgMicrosoft_Web_WebView2)\lib_manual\netcoreapp3.0\Microsoft.Web.WebView2.WinForms.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="_upstream_instalocker\**" />
+    <Compile Remove="_upstream_radiantconnect\**" />
+    <Content Remove="_upstream_instalocker\**" />
+    <Content Remove="_upstream_radiantconnect\**" />
+    <Content Remove="wwwroot\**\*" />
+    <EmbeddedResource Remove="_upstream_instalocker\**" />
+    <EmbeddedResource Remove="_upstream_radiantconnect\**" />
+    <None Remove="_upstream_instalocker\**" />
+    <None Remove="_upstream_radiantconnect\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="wwwroot\**\*" />
+    <!-- Also embedded so the window icon survives a single-file publish. -->
+    <EmbeddedResource Include="images\app.ico" LogicalName="Astral.app.ico" />
+    <Content Update="appsettings*.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <ExcludeFromSingleFile>false</ExcludeFromSingleFile>
+    </Content>
+    <Content Include="$(PkgMicrosoft_Web_WebView2)\runtimes\win-x64\native\WebView2Loader.dll">
+      <Link>WebView2Loader.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <ExcludeFromSingleFile>false</ExcludeFromSingleFile>
+    </Content>
+  </ItemGroup>
+
+</Project>

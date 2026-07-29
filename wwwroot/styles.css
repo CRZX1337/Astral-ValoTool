@@ -1,0 +1,1388 @@
+/* ==========================================================================
+   Astral -- sleek dark glass
+   1. Tokens          5. Agent grid       8. Settings modal
+   2. Base            6. Control panel    9. Motion + responsive
+   3. Shell + topbar  7. Buttons
+   4. Toolbar
+   ========================================================================== */
+
+/* 1. Tokens ============================================================== */
+
+:root {
+  color-scheme: dark;
+
+  --bg-0: #07080b;
+  --bg-1: #0d0f14;
+
+  --surface: rgba(255, 255, 255, 0.045);
+  --surface-raised: rgba(255, 255, 255, 0.065);
+  --hairline: rgba(255, 255, 255, 0.09);
+  --hairline-strong: rgba(255, 255, 255, 0.18);
+
+  --text: #f1f2f6;
+  --text-muted: #9aa1b0;
+  --text-dim: #6a7183;
+
+  --bad: #ff5a68;
+  --bad-soft: rgba(255, 90, 104, 0.12);
+
+  --ambient-a: rgba(108, 122, 255, 0.20);
+  --ambient-b: rgba(255, 90, 104, 0.13);
+
+  --blur: blur(22px) saturate(140%);
+  --shadow: 0 18px 44px rgba(0, 0, 0, 0.45);
+  --ease: cubic-bezier(0.22, 0.68, 0.35, 1);
+
+  --panel-w: clamp(272px, 26vw, 340px);
+}
+
+/* Role accents. One block per role -- adding a role never needs new rules
+   anywhere else, only a `data-role` value the backend already supplies. */
+[data-role="duelist"] {
+  --accent: #ff5a68;
+  --accent-soft: rgba(255, 90, 104, 0.15);
+  --accent-glow: rgba(255, 90, 104, 0.42);
+}
+
+[data-role="initiator"] {
+  --accent: #f5c451;
+  --accent-soft: rgba(245, 196, 81, 0.15);
+  --accent-glow: rgba(245, 196, 81, 0.40);
+}
+
+[data-role="controller"] {
+  --accent: #a97bff;
+  --accent-soft: rgba(169, 123, 255, 0.16);
+  --accent-glow: rgba(169, 123, 255, 0.42);
+}
+
+[data-role="sentinel"] {
+  --accent: #3ddc97;
+  --accent-soft: rgba(61, 220, 151, 0.14);
+  --accent-glow: rgba(61, 220, 151, 0.38);
+}
+
+[data-role="unknown"] {
+  --accent: #8b93a7;
+  --accent-soft: rgba(139, 147, 167, 0.14);
+  --accent-glow: rgba(139, 147, 167, 0.34);
+}
+
+[data-role="all"] {
+  --accent: #c9cede;
+  --accent-soft: rgba(201, 206, 222, 0.12);
+  --accent-glow: rgba(201, 206, 222, 0.30);
+}
+
+/* Phase colours. `locked` deliberately borrows the agent's own accent so a
+   successful lock lights the panel up in that agent's colour. */
+[data-phase="booting"],
+[data-phase="offline"],
+[data-phase="idle"] {
+  --phase: #7d8496;
+  --phase-soft: rgba(125, 132, 150, 0.28);
+}
+
+[data-phase="arming"] {
+  --phase: #f5c451;
+  --phase-soft: rgba(245, 196, 81, 0.30);
+}
+
+[data-phase="monitoring"] {
+  --phase: #3ddc97;
+  --phase-soft: rgba(61, 220, 151, 0.30);
+}
+
+[data-phase="locked"] {
+  --phase: var(--accent);
+  --phase-soft: var(--accent-glow);
+}
+
+[data-phase="error"] {
+  --phase: var(--bad);
+  --phase-soft: rgba(255, 90, 104, 0.30);
+}
+
+/* 2. Base =============================================================== */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background: linear-gradient(180deg, var(--bg-0), var(--bg-1) 60%, #101219);
+  color: var(--text);
+  font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+p,
+dl,
+dd {
+  margin: 0;
+}
+
+/* Component rules set `display`, which would otherwise out-specify the
+   `hidden` attribute the views toggle. */
+[hidden] {
+  display: none !important;
+}
+
+.ambient {
+  position: fixed;
+  inset: -20%;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(48% 46% at 22% 12%, var(--ambient-a), transparent 68%),
+    radial-gradient(42% 52% at 88% 34%, var(--ambient-b), transparent 70%);
+  animation: drift 22s ease-in-out infinite alternate;
+}
+
+.glass {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  box-shadow: var(--shadow);
+}
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.24);
+  background-clip: content-box;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent, #c9cede);
+  outline-offset: 2px;
+}
+
+/* 3. Shell + topbar ===================================================== */
+
+.app {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--panel-w);
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+  height: 100dvh;
+  padding: 12px;
+}
+
+.topbar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 54px;
+  padding: 0 14px;
+  border-radius: 16px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+
+.brand-mark {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 10px var(--accent-glow));
+  transition: filter 400ms var(--ease);
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+  min-width: 0;
+}
+
+.brand-text strong {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.brand-text span {
+  font-size: 0.98rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.topbar-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notice-pill {
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(245, 196, 81, 0.10);
+  border: 1px solid rgba(245, 196, 81, 0.26);
+  color: #f5c451;
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.phase-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 32px;
+  padding: 0 13px 0 11px;
+  border-radius: 999px;
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.phase-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--phase);
+  box-shadow: 0 0 10px var(--phase-soft);
+  transition: background 300ms var(--ease);
+}
+
+[data-phase="monitoring"] .phase-dot,
+[data-phase="locked"] .phase-dot {
+  animation: pulse-ring 1.8s var(--ease) infinite;
+}
+
+[data-phase="arming"] .phase-dot {
+  animation: blink 900ms steps(2, jump-none) infinite;
+}
+
+[data-phase="offline"] .phase-dot {
+  animation: blink 1.6s ease-in-out infinite;
+}
+
+/* 4. Toolbar ============================================================ */
+
+.browser {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 8px 11px;
+  border-radius: 16px;
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 1 196px;
+  min-width: 124px;
+  height: 36px;
+  padding: 0 9px 0 11px;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--hairline);
+  transition: border-color 160ms var(--ease), box-shadow 160ms var(--ease);
+}
+
+.search:focus-within {
+  border-color: var(--hairline-strong);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.05);
+}
+
+.search-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: var(--text-dim);
+  stroke-width: 1.7;
+  stroke-linecap: round;
+}
+
+.search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.88rem;
+}
+
+.search input::placeholder {
+  color: var(--text-dim);
+}
+
+.search input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.search-key {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 0.68rem;
+}
+
+/* Scrolls rather than wraps -- an extra toolbar row is 30px the 550px tall
+   window cannot spare. The mask makes an overflowing chip read as cut off
+   on purpose. */
+.filters {
+  display: flex;
+  gap: 5px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  mask-image: linear-gradient(90deg, #000 calc(100% - 18px), transparent);
+}
+
+.filters::-webkit-scrollbar {
+  display: none;
+}
+
+.chip {
+  flex: none;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 150ms var(--ease), color 150ms var(--ease), border-color 150ms var(--ease);
+}
+
+.chip:hover {
+  background: rgba(255, 255, 255, 0.09);
+  color: var(--text);
+}
+
+.chip.is-active {
+  background: var(--accent-soft);
+  border-color: var(--accent-glow);
+  color: var(--accent);
+}
+
+.result-count {
+  flex: none;
+  color: var(--text-dim);
+  font-size: 0.76rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 5. Agent grid ========================================================= */
+
+.grid-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 2px 8px 4px 2px;
+}
+
+.agent-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(122px, 1fr));
+  gap: 10px;
+}
+
+.agent-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 9px 9px 10px;
+  border-radius: 15px;
+  border: 1px solid var(--hairline);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.015));
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  transition:
+    transform 170ms var(--ease),
+    border-color 170ms var(--ease),
+    box-shadow 170ms var(--ease);
+}
+
+/* Per agent tint from the valorant-api gradient -- no blur here, 28 blurred
+   layers is a real frame-rate cost in WebView2. */
+.agent-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(115% 75% at 50% 0%, var(--card-tint, transparent), transparent 72%);
+  opacity: 0.3;
+  transition: opacity 170ms var(--ease);
+}
+
+.agent-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent-glow);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.42);
+}
+
+.agent-card:hover::before {
+  opacity: 0.6;
+}
+
+.agent-card.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-glow), 0 14px 30px rgba(0, 0, 0, 0.5);
+}
+
+.agent-card.is-selected::before {
+  opacity: 0.85;
+}
+
+.agent-card:active {
+  transform: translateY(0);
+}
+
+.card-art {
+  position: relative;
+  display: grid;
+  width: 100%;
+  height: 62px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: linear-gradient(165deg, var(--accent-soft), rgba(255, 255, 255, 0.02));
+  transition: transform 220ms var(--ease);
+}
+
+.card-art > * {
+  grid-area: 1 / 1;
+}
+
+.agent-card:hover .card-art {
+  transform: scale(1.06);
+}
+
+/* Fades in over the monogram once decoded. Kept at opacity 0 rather than
+   display:none so `loading="lazy"` still sees a box to intersect. */
+.card-portrait {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 14%;
+  opacity: 0;
+  transition: opacity 240ms var(--ease);
+}
+
+.card-portrait.is-mirrored {
+  transform: scaleX(-1);
+}
+
+.card-monogram {
+  place-self: center;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+}
+
+.card-art[data-art="portrait"] .card-portrait {
+  opacity: 1;
+}
+
+.card-art[data-art="portrait"] .card-monogram {
+  display: none;
+}
+
+.card-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.card-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card-role {
+  font-size: 0.64rem;
+  font-weight: 500;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  transition: color 170ms var(--ease);
+}
+
+.agent-card.is-selected .card-role {
+  color: var(--accent);
+}
+
+.card-flag {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--phase);
+  box-shadow: 0 0 0 3px rgba(7, 8, 11, 0.75), 0 0 10px var(--phase-soft);
+  opacity: 0;
+  transform: scale(0.4);
+  transition: opacity 200ms var(--ease), transform 200ms var(--ease);
+}
+
+.agent-card[data-flag="target"] .card-flag,
+.agent-card[data-flag="locked"] .card-flag {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.agent-card[data-flag="locked"] .card-flag {
+  animation: pulse-ring 1.8s var(--ease) infinite;
+}
+
+.agent-card.is-skeleton {
+  height: 118px;
+  cursor: default;
+  pointer-events: none;
+  background:
+    linear-gradient(100deg,
+      rgba(255, 255, 255, 0.03) 28%,
+      rgba(255, 255, 255, 0.075) 48%,
+      rgba(255, 255, 255, 0.03) 68%);
+  background-size: 240% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
+.grid-empty {
+  display: grid;
+  place-items: center;
+  min-height: 140px;
+  padding: 20px;
+  border-radius: 15px;
+  border: 1px dashed var(--hairline);
+  color: var(--text-dim);
+  font-size: 0.86rem;
+  text-align: center;
+}
+
+/* 6. Control panel ====================================================== */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+  padding: 14px;
+  border-radius: 20px;
+  overflow-y: auto;
+  transition: border-color 300ms var(--ease), box-shadow 300ms var(--ease);
+}
+
+[data-phase="locked"] .panel {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-glow), 0 18px 60px var(--accent-glow);
+}
+
+[data-phase="error"] .panel {
+  border-color: rgba(255, 90, 104, 0.35);
+}
+
+[data-phase="arming"] .panel {
+  animation: breathe 1.7s ease-in-out infinite;
+}
+
+/* Shrinkable on purpose: when the alert banner appears it must give up
+   height rather than push the Stop button out of view. */
+.hero-art {
+  position: relative;
+  display: grid;
+  flex: 0 1 auto;
+  height: clamp(112px, 19vh, 180px);
+  min-height: 72px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  background: linear-gradient(165deg, var(--accent-soft), rgba(255, 255, 255, 0.02));
+}
+
+.hero-art > * {
+  grid-area: 1 / 1;
+}
+
+.hero-art::after {
+  content: "";
+  grid-area: 1 / 1;
+  background: linear-gradient(180deg, transparent 42%, rgba(7, 8, 11, 0.82));
+  pointer-events: none;
+}
+
+.hero-backdrop {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.13;
+}
+
+.hero-portrait {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 8%;
+  opacity: 0;
+  transition: opacity 260ms var(--ease);
+}
+
+.hero-portrait.is-mirrored {
+  transform: scaleX(-1);
+}
+
+.hero-watermark {
+  place-self: center;
+  width: 46%;
+  max-width: 96px;
+  opacity: 0.18;
+}
+
+.hero-monogram {
+  place-self: center;
+  font-size: 2.4rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+}
+
+.hero-art[data-art="portrait"] .hero-portrait {
+  opacity: 1;
+}
+
+.hero-art[data-art="portrait"] .hero-monogram {
+  display: none;
+}
+
+/* Radar sweep while the worker is watching pre-game. */
+.hero-art[data-phase="monitoring"]::before {
+  content: "";
+  grid-area: 1 / 1;
+  place-self: center;
+  z-index: 1;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 1px solid var(--phase);
+  animation: radar 2.2s var(--ease) infinite;
+  pointer-events: none;
+}
+
+.hero-badge {
+  place-self: end start;
+  z-index: 2;
+  margin: 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  /* Opaque backing rather than relying on the blur -- WebView2 without a GPU
+     can drop backdrop-filter, and this badge must stay legible over art. */
+  background: linear-gradient(var(--accent-soft), var(--accent-soft)), rgba(7, 8, 11, 0.62);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.panel-identity {
+  min-width: 0;
+}
+
+.eyebrow {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.panel-name {
+  margin-top: 3px;
+  font-size: clamp(1.3rem, 2.4vw, 1.65rem);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+  overflow-wrap: anywhere;
+}
+
+.role-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  margin-top: 7px;
+  padding: 0 9px;
+  border-radius: 7px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-glow);
+  color: var(--accent);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.panel-status {
+  padding: 11px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--hairline);
+}
+
+.status-line {
+  font-size: 0.88rem;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+}
+
+.panel-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid var(--hairline);
+}
+
+.panel-meta dt {
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.panel-meta dd {
+  margin-top: 3px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.panel-alert {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--bad-soft);
+  border: 1px solid rgba(255, 90, 104, 0.28);
+  color: #ff929b;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+/* 7. Buttons ============================================================ */
+
+.panel-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 46px;
+  padding: 0 16px;
+  border-radius: 13px;
+  border: 1px solid transparent;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition:
+    transform 150ms var(--ease),
+    background 150ms var(--ease),
+    border-color 150ms var(--ease),
+    box-shadow 150ms var(--ease),
+    opacity 150ms var(--ease);
+}
+
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: linear-gradient(180deg, #ffffff, #dcdfe8);
+  color: #08090b;
+  box-shadow: 0 10px 26px var(--accent-glow);
+}
+
+.btn-primary:hover:not(:disabled) {
+  box-shadow: 0 14px 32px var(--accent-glow);
+}
+
+.btn-ghost {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--hairline);
+  color: var(--text);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--bad-soft);
+  border-color: rgba(255, 90, 104, 0.35);
+  color: #ff929b;
+}
+
+.btn-spinner {
+  display: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.28);
+  border-top-color: currentColor;
+  animation: spin 700ms linear infinite;
+}
+
+.btn-primary .btn-spinner {
+  border-color: rgba(8, 9, 11, 0.25);
+  border-top-color: currentColor;
+}
+
+.btn.is-busy .btn-spinner {
+  display: block;
+}
+
+/* 8. Settings modal ===================================================== */
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 9px;
+  border: 1px solid var(--hairline);
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 150ms var(--ease), color 150ms var(--ease), border-color 150ms var(--ease);
+}
+
+.icon-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--hairline-strong);
+  color: var(--text);
+}
+
+.icon-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+/* Flex rather than grid: a centred grid row grows with its content, so the
+   panel's max-height would resolve against that row instead of the viewport
+   and push the footer off screen in a short window. */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(4, 5, 8, 0.62);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+.modal-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(560px, 100%);
+  max-height: 100%;
+  border-radius: 20px;
+  animation: modal-in 180ms var(--ease);
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.modal-title {
+  margin: 0;
+  font-size: 1.02rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.modal-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--hairline);
+}
+
+.setting-group + .setting-group {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--hairline);
+}
+
+.setting-title {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.setting-hint,
+.settings-loading,
+.rule-empty {
+  margin-top: 6px;
+  color: var(--text-dim);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.slider-row {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr) 74px auto;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.slider-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.slider-row label {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.tip-trigger {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--hairline-strong);
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 0.58rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: help;
+  transition: color 150ms var(--ease), border-color 150ms var(--ease);
+}
+
+.tip-trigger:hover,
+.tip-trigger:focus-visible {
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 60;
+  max-width: 268px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  background: rgba(20, 22, 30, 0.97);
+  border: 1px solid var(--hairline-strong);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.55);
+  color: var(--text);
+  font-size: 0.78rem;
+  line-height: 1.42;
+  /* Never intercept the pointer, or moving onto the bubble would hide it. */
+  pointer-events: none;
+  animation: tip-in 130ms var(--ease);
+}
+
+.slider-unit {
+  color: var(--text-dim);
+  font-size: 0.74rem;
+}
+
+.slider {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.11);
+  cursor: pointer;
+}
+
+.slider::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 15px;
+  height: 15px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--text);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.07), 0 2px 6px rgba(0, 0, 0, 0.55);
+  transition: box-shadow 150ms var(--ease);
+}
+
+.slider::-moz-range-thumb {
+  width: 15px;
+  height: 15px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--text);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.07), 0 2px 6px rgba(0, 0, 0, 0.55);
+}
+
+.slider:hover::-webkit-slider-thumb,
+.slider:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px var(--accent-soft), 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+.slider:focus-visible {
+  outline: none;
+}
+
+.slider-value {
+  min-width: 0;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 9px;
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.slider-value:focus {
+  outline: none;
+  border-color: var(--hairline-strong);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.05);
+}
+
+.rule-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.rule-list:empty {
+  margin-top: 0;
+}
+
+.rule-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.rule-arrow {
+  color: var(--text-dim);
+  font-size: 0.9rem;
+}
+
+/* The stock control would drop an OS-styled arrow into an otherwise custom
+   surface, so the chevron is drawn here instead. */
+.rule-row select {
+  appearance: none;
+  -webkit-appearance: none;
+  min-width: 0;
+  height: 36px;
+  padding: 0 30px 0 10px;
+  border-radius: 10px;
+  border: 1px solid var(--hairline);
+  background-color: rgba(255, 255, 255, 0.05);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' fill='none' stroke='%239aa1b0' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 11px center;
+  background-size: 11px;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: border-color 150ms var(--ease), background-color 150ms var(--ease);
+}
+
+.rule-row select:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+  border-color: var(--hairline-strong);
+}
+
+/* The popup list is drawn by the OS, so it needs explicit dark colours. */
+.rule-row option {
+  background: #14161d;
+  color: var(--text);
+}
+
+.rule-remove {
+  width: 30px;
+  height: 30px;
+}
+
+.rule-remove:hover {
+  background: var(--bad-soft);
+  border-color: rgba(255, 90, 104, 0.35);
+  color: #ff929b;
+}
+
+.save-note {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--text-dim);
+}
+
+.save-note.is-error {
+  color: #ff929b;
+}
+
+.btn-compact {
+  min-height: 38px;
+  padding: 0 20px;
+  font-size: 0.86rem;
+}
+
+.btn-quiet {
+  align-self: flex-start;
+  margin-top: 12px;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border-color: var(--hairline);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.btn-quiet:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.09);
+  color: var(--text);
+}
+
+/* 9. Motion + responsive ================================================ */
+
+@keyframes drift {
+  from { transform: translate3d(-1.5%, -1%, 0) scale(1); }
+  to   { transform: translate3d(2%, 2.5%, 0) scale(1.06); }
+}
+
+@keyframes pulse-ring {
+  0%   { box-shadow: 0 0 0 0 var(--phase-soft); }
+  70%  { box-shadow: 0 0 0 9px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.25; }
+}
+
+@keyframes shimmer {
+  from { background-position: 190% 0; }
+  to   { background-position: -90% 0; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes radar {
+  0%   { transform: scale(0.5); opacity: 0.7; }
+  100% { transform: scale(2.1); opacity: 0; }
+}
+
+@keyframes breathe {
+  0%, 100% { border-color: var(--hairline); }
+  50%      { border-color: var(--phase); }
+}
+
+@keyframes tip-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Below the desktop window's minimum width the panel docks to the bottom. */
+@media (max-width: 900px) {
+  .app {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+
+  .panel {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    overflow: visible;
+  }
+
+  /* The panel is a row here, so the vertical shrink from the sidebar layout
+     would collapse the hero's width instead. */
+  .hero-art {
+    flex: none;
+    width: 88px;
+    height: 88px;
+  }
+
+  .panel-identity {
+    flex: 1 1 140px;
+  }
+
+  .panel-status {
+    flex: 3 1 240px;
+  }
+
+  .panel-alert {
+    flex: 1 1 100%;
+  }
+
+  .panel-actions {
+    flex: 1 1 100%;
+    flex-direction: row;
+    margin-top: 0;
+  }
+
+  .btn {
+    flex: 1;
+  }
+}
+
+@media (max-width: 620px) {
+  .toolbar {
+    flex-wrap: wrap;
+  }
+
+  .search {
+    flex: 1 1 100%;
+  }
+
+  .panel-actions {
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+
+  .agent-card:hover {
+    transform: none;
+  }
+
+  .agent-card:hover .card-art {
+    transform: none;
+  }
+}
