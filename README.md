@@ -1,6 +1,6 @@
 # Astral 🎯
 
-A lightweight Windows desktop app and local REST/SSE API for automated Valorant agent selection.
+Lock your Valorant agent before anyone else in the lobby finishes loading.
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 ![Framework: .NET 10](https://img.shields.io/badge/Framework-.NET%2010.0-purple.svg)
@@ -8,87 +8,99 @@ A lightweight Windows desktop app and local REST/SSE API for automated Valorant 
 
 ---
 
-## Overview
+## 🎉 What it does
 
-Trying to manually pick your agent in Valorant's pre-game lobby often comes down to who has the fastest client load or mouse reflexes. **Astral** solves this by listening directly to Valorant's local client API and automatically selecting and locking your designated agent the moment you enter pre-game.
+Picking an agent in pre-game usually comes down to whose client loaded first and who moved their mouse fastest. Astral listens to Valorant's local client API instead, and hovers and locks your agent the second pre-game opens.
 
-It runs as a standalone C# application that pairs an embedded ASP.NET Core Web API with a native WebView2 desktop window. You can manage everything through the dark-mode desktop UI, or send requests directly to its local REST endpoints if you prefer integrating it into your own setup.
-
----
-
-## Features
-
-- **Instant Agent Locking:** Automatically detects pre-game lobby state and locks your requested agent via `RadiantConnect`.
-- **Per-Map Agent Overrides:** Set map-specific rules (for example, automatically lock Sova on Ascent, Viper on Breeze, or Omen on Lotus).
-- **Customizable Timing Delays:** Fine-tune hover, lock, and post-lock delays in milliseconds to adjust speed or simulate natural selection.
-- **Real-Time State Streaming:** Uses Server-Sent Events (`/api/state/stream`) so the interface and external clients get instant updates without polling.
-- **System Tray Support:** Closing the main window minimizes Astral to the system tray so your lock loop keeps running smoothly in the background.
-- **Dynamic Asset Sync:** Pulls high-res agent portraits and role icons on the fly from `valorant-api.com`.
-- **Self-Contained Executable:** Ships with all web frontend assets embedded directly inside the compiled binary.
+It's one C# app: an embedded ASP.NET Core Web API behind a native WebView2 window. Use the dark-mode desktop UI, or skip it entirely and talk to the local REST endpoints from your own scripts.
 
 ---
 
-## Tech Stack
+## ✨ Features
 
-- **Runtime & Framework:** C# 13 on .NET 10.0 (`net10.0-windows`)
-- **App Host:** ASP.NET Core Web API + WinForms + WebView2
-- **Valorant Client Interface:** [RadiantConnect](https://github.com/RadiantConnect) (v10.6.1)
-- **Frontend UI:** Vanilla HTML5, CSS, and JavaScript (served via embedded `wwwroot` files)
-- **Persistence:** `%APPDATA%\Astral\settings.json` for user overrides, backed by `appsettings.json` defaults
-- **Portable:** nothing is written next to the executable — the embedded browser keeps its profile in `%LOCALAPPDATA%\Astral\WebView2`
+- ⚡ Detects the pre-game lobby and locks your agent through `RadiantConnect`.
+- 🗺️ Per-map overrides, so you can have Sova on Ascent, Viper on Breeze, Omen on Lotus, and your main everywhere else.
+- ⏱️ Hover, lock, and post-lock delays in milliseconds if you want the pick to look less instant.
+- 📡 Server-Sent Events on `/api/state/stream`, so the UI and any external client stay current without polling.
+- 🔔 Closing the window sends Astral to the system tray. The lock loop keeps running.
+- 🖼️ Agent portraits and role icons are fetched from `valorant-api.com` at runtime.
+- 📦 The whole web frontend is embedded in the binary.
 
 ---
 
-## Installation & Setup
+## 📸 Screenshots
 
-### Prerequisites
+### Main interface
+![Astral Main Interface](images/main.png)
+
+### Settings and map overrides
+![Astral Settings](images/settings.png)
+
+---
+
+## 🏗️ Tech stack
+
+- C# 13 on .NET 10.0 (`net10.0-windows`)
+- ASP.NET Core Web API, WinForms, and WebView2 in one process
+- [RadiantConnect](https://github.com/RadiantConnect) v10.6.1 for the Valorant client interface
+- Plain HTML5, CSS, and JavaScript, served from the embedded `wwwroot`
+- Settings live in `%APPDATA%\Astral\settings.json`, with `appsettings.json` as the fallback
+- Nothing gets written next to the executable. The embedded browser keeps its profile in `%LOCALAPPDATA%\Astral\WebView2`
+
+---
+
+## 📦 Installation
+
+### You'll need
 
 - Windows 10 or 11
-- [.NET 10.0 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) (to build from source)
-- [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) (usually pre-installed on modern Windows)
+- [.NET 10.0 SDK](https://dotnet.microsoft.com/download/dotnet/10.0), if you're building from source
+- [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/), which is already on most modern Windows installs
 - Valorant running on the same machine
 
-### Building from Source
+### Build from source
 
-1. Clone the repository:
+1. Clone it:
    ```powershell
    git clone https://github.com/CRZX1337/Astral-ValoTool.git
    cd Astral-ValoTool
    ```
 
-2. Build and run in debug or release mode:
+2. Run it:
    ```powershell
    dotnet run -c Release
    ```
 
-3. (Optional) Publish a standalone executable:
+3. Or publish a standalone executable:
    ```powershell
    dotnet publish -p:PublishProfile=SingleFile
    ```
-   This uses the profile shipped in `Properties\PublishProfiles\`, which compresses the runtime, the
-   frontend and the WebView2 loader into a single self-contained `Astral.exe` (~62 MB) under
-   `bin\Publish\SingleFile\`. That one file is all you need to ship — the `.pdb` and `web.config`
-   written next to it are not required to run.
+   This uses the profile in `Properties\PublishProfiles\`, which squeezes the runtime, the frontend
+   and the WebView2 loader into a single self-contained `Astral.exe` (~62 MB) under
+   `bin\Publish\SingleFile\`. That one file is everything you need to ship. The `.pdb` and
+   `web.config` written next to it aren't required to run.
 
-   A plain `dotnet publish -c Release -r win-x64 --self-contained` also works, but leaves the runtime
-   spread across a folder of loose assemblies instead.
+   A plain `dotnet publish -c Release -r win-x64 --self-contained` works too, but you end up with the
+   runtime scattered across a folder of loose assemblies.
 
 ---
 
-## Usage
+## 🚀 Usage
 
-### Desktop Interface
+### Desktop
 
-1. Start **Astral.exe** before or during a Valorant session.
-2. Select your main agent from the grid — press `/` to jump to the search box.
-3. Configure any per-map agent overrides if you play different agents on different maps.
-4. Click **Start Locking**. Astral will monitor your local game client and trigger the selection when pre-game starts.
-5. You can safely close the window — it will minimize to the notification tray and keep running.
+1. Start **Astral.exe**, either before or during a Valorant session.
+2. Pick your main from the agent grid. Press `/` to jump straight to the search box.
+3. Add per-map overrides if you swap agents depending on the map.
+4. Hit **Start Locking**. Astral watches your local game client and fires when pre-game starts.
+5. Close the window whenever you want. It minimizes to the notification tray and keeps going.
 
-### API Endpoints
+---
 
-Astral binds Kestrel to a random loopback port on startup — `127.0.0.1` only, never reachable from
-the network. You can trigger or monitor agent locks programmatically:
+## 🔌 API
+
+On startup, Astral binds Kestrel to a random loopback port. It's `127.0.0.1` only, so nothing on your
+network can reach it. From there you can drive or watch the lock loop yourself:
 
 | Route | Purpose |
 |---|---|
@@ -101,7 +113,7 @@ the network. You can trigger or monitor agent locks programmatically:
 | `GET /api/options` | Settings plus the list of maps they can refer to |
 | `PATCH /api/options` | Partial settings update, validated and persisted |
 
-#### Start or Change Target Agent
+#### Start, or switch target agent
 ```http
 POST /api/lock
 Content-Type: application/json
@@ -111,17 +123,17 @@ Content-Type: application/json
 }
 ```
 
-#### Stop Locking
+#### Stop
 ```http
 POST /api/stop
 ```
 
-#### Get Current State
+#### Current state
 ```http
 GET /api/state
 ```
 
-Response format:
+You get back:
 ```json
 {
   "isRunning": true,
@@ -133,16 +145,16 @@ Response format:
 }
 ```
 
-`isRunning` means the monitoring loop is active; `isLocked` is only true during the brief window
-after a successful lock, for as long as the *Show Locked for* setting keeps it there.
+`isRunning` tells you the monitoring loop is active. `isLocked` is only true for the short window
+after a successful lock, for as long as the *Show Locked for* setting holds it there.
 
-#### Real-Time SSE Stream
+#### Live stream
 ```http
 GET /api/state/stream
 ```
-Streams `data: {...}` payloads whenever state changes, with periodic `: ping` keepalive lines.
+Sends `data: {...}` payloads on every state change, with `: ping` keepalive lines in between.
 
-#### Update Settings & Overrides
+#### Settings and overrides
 ```http
 PATCH /api/options
 Content-Type: application/json
@@ -160,9 +172,10 @@ Content-Type: application/json
 
 ---
 
-## Configuration
+## 🔧 Configuration
 
-Settings are saved automatically to `%APPDATA%\Astral\settings.json` when updated via the UI or API. Default settings originate from `appsettings.json`:
+Whenever you change something in the UI or through the API, it's saved to
+`%APPDATA%\Astral\settings.json`. The defaults come from `appsettings.json`:
 
 ```json
 {
@@ -177,48 +190,37 @@ Settings are saved automatically to `%APPDATA%\Astral\settings.json` when update
 }
 ```
 
-### Configuration Options
-
 | Parameter | Type | Description |
 |---|---|---|
-| `HoverDelayMs` | integer | Delay (in ms) before hovering/selecting the agent in pre-game. Range: 0–10000ms. |
-| `LockDelayMs` | integer | Additional delay (in ms) between hovering and clicking Lock. Range: 0–10000ms. |
-| `PostLockDelayMs` | integer | Idle delay (in ms) after locking before resetting state. Range: 0–10000ms. |
-| `MapAgentOverrides` | object | Dictionary mapping exact map names (e.g. `"Ascent"`, `"Breeze"`) to canonical agent names. |
+| `HoverDelayMs` | integer | Wait before hovering/selecting the agent in pre-game. 0 to 10000 ms. |
+| `LockDelayMs` | integer | Extra wait between hovering and clicking Lock. 0 to 10000 ms. |
+| `PostLockDelayMs` | integer | Idle time after locking, before the state resets. 0 to 10000 ms. |
+| `MapAgentOverrides` | object | Maps exact map names (`"Ascent"`, `"Breeze"`) to canonical agent names. |
 
 ---
 
-## Screenshots
+## 👥 Contributing
 
-### Main Interface
-![Astral Main Interface](images/main.png)
+Bug reports and pull requests are welcome. If something's broken or you want a feature, open an issue
+or send a PR.
 
-### Settings & Map Overrides
-![Astral Settings](images/settings.png)
-
----
-
-## Contributing
-
-Contributions and bug reports are welcome. Feel free to open an issue or submit a pull request if you notice a bug or want to add a feature.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/cool-feature`)
-3. Commit your changes (`git commit -m 'Add cool feature'`)
-4. Push to the branch (`git push origin feature/cool-feature`)
-5. Open a Pull Request
+1. Fork the repo
+2. Branch off (`git checkout -b feature/cool-feature`)
+3. Commit (`git commit -m 'Add cool feature'`)
+4. Push (`git push origin feature/cool-feature`)
+5. Open a pull request
 
 ---
 
-## License
+## 📄 License
 
-This project is licensed under the [MIT License](LICENSE).
+[MIT](LICENSE).
 
 ---
 
-## Disclaimer & Credits
+## 🙏 Credits and disclaimer
 
-- Astral builds on [Askin242/Valorant-Instalocker-API](https://github.com/Askin242/Valorant-Instalocker-API) by [Sysy's](https://github.com/Askin242), whose C# implementation the pre-game lock loop still comes from — originally inspired by [SuppliedOrange](https://github.com/SuppliedOrange).
-- Built using [RadiantConnect](https://github.com/RadiantConnect) ([project site](https://radiantconnect.ca/)) for local Valorant client API communication.
-- Agent assets and icons provided by [Valorant-API](https://valorant-api.com/).
-- **Astral** is not affiliated with, endorsed by, or sponsored by Riot Games, Inc. Valorant is a registered trademark of Riot Games, Inc. Use at your own discretion.
+- Astral builds on [Askin242/Valorant-Instalocker-API](https://github.com/Askin242/Valorant-Instalocker-API) by [Sysy's](https://github.com/Askin242). The pre-game lock loop still comes from that C# implementation, which was originally inspired by [SuppliedOrange](https://github.com/SuppliedOrange).
+- Local Valorant client communication runs through [RadiantConnect](https://github.com/RadiantConnect) ([project site](https://radiantconnect.ca/)).
+- Agent assets and icons come from [Valorant-API](https://valorant-api.com/).
+- Astral is not affiliated with, endorsed by, or sponsored by Riot Games, Inc. Valorant is a registered trademark of Riot Games, Inc. Use at your own discretion.
