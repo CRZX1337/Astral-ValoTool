@@ -801,11 +801,11 @@
     box-shadow: var(--shadow);
   }
 
-  /* Mirrors .app: topbar spanning both columns, then grid + panel. */
+  /* Mirrors .app: a topbar over one switchable viewport. The two-column
+     split now belongs to the instalock view, exactly as in the real app. */
   .rep {
     position: relative;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) clamp(258px, 25%, 320px);
     grid-template-rows: auto minmax(0, 1fr);
     gap: 12px;
     /* The app is a 1000x550 window; this keeps the same proportions without
@@ -841,7 +841,6 @@
   /* --- Topbar --- */
 
   .rep-topbar {
-    grid-column: 1 / -1;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -953,6 +952,444 @@
     width: 16px;
     height: 16px;
     fill: currentColor;
+  }
+
+  /* --- Viewport, home menu and tool chrome --- */
+  /* Mirrors wwwroot/css/shell.css. The replica switches views by toggling
+     `hidden`, exactly as the app does. */
+
+  .rep-viewport {
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .rep-view {
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    animation: rep-view-in 320ms var(--ease-out) both;
+  }
+
+  .rep-view-instalock {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) clamp(258px, 25%, 320px);
+    gap: 12px;
+  }
+
+  .rep-view-tool {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-y: auto;
+  }
+
+  @keyframes rep-view-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  .rep-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 11px 5px 8px;
+    border: 1px solid var(--hairline);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 200ms var(--ease), color 200ms var(--ease), background 200ms var(--ease);
+  }
+
+  .rep-back:hover {
+    border-color: var(--hairline-strong);
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text);
+  }
+
+  .rep-back svg {
+    width: 13px;
+    height: 13px;
+    fill: currentColor;
+  }
+
+  .rep-home {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    height: 100%;
+    overflow-y: auto;
+  }
+
+  .rep-home-title {
+    margin: 0;
+    font-size: clamp(1.15rem, 2.4vw, 1.5rem);
+    font-weight: 700;
+    letter-spacing: -0.035em;
+  }
+
+  .rep-home-sub {
+    margin: 3px 0 0;
+    color: var(--text-muted);
+    font-size: 0.84rem;
+  }
+
+  .rep-tool-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+  }
+
+  .rep-tool-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    min-height: 156px;
+    padding: 15px;
+    border-radius: 20px;
+    color: inherit;
+    text-align: left;
+    font: inherit;
+    cursor: pointer;
+    overflow: hidden;
+    animation: rep-card-in 460ms var(--ease-out) both;
+    animation-delay: calc(var(--i, 0) * 65ms);
+    transition: border-color 240ms var(--ease), transform 240ms var(--ease-out);
+  }
+
+  @keyframes rep-card-in {
+    from { opacity: 0; transform: translateY(14px) scale(0.985); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  .rep-tool-card:hover {
+    border-color: color-mix(in srgb, var(--brand) 45%, transparent);
+    transform: translateY(-3px);
+  }
+
+  .rep-tool-icon {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+    border: 1px solid color-mix(in srgb, var(--brand) 28%, transparent);
+    background: color-mix(in srgb, var(--brand) 14%, transparent);
+    color: var(--brand);
+  }
+
+  .rep-tool-icon svg {
+    width: 19px;
+    height: 19px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .rep-tool-name {
+    font-size: 0.98rem;
+    font-weight: 660;
+    letter-spacing: -0.02em;
+  }
+
+  .rep-tool-desc {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    line-height: 1.4;
+  }
+
+  .rep-tool-status {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-top: auto;
+    padding-top: 9px;
+    border-top: 1px solid var(--hairline);
+    color: var(--text-dim);
+    font-size: 0.73rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .rep-tool-status[data-live="on"] {
+    color: var(--brand);
+  }
+
+  .rep-tool-dot {
+    width: 6px;
+    height: 6px;
+    flex: none;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  .rep-tool-status[data-live="on"] .rep-tool-dot {
+    animation: pulse-ring 2.2s var(--ease) infinite;
+  }
+
+  .rep-tool-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 13px 15px;
+    border-radius: 16px;
+  }
+
+  .rep-tool-head-title {
+    font-size: 1rem;
+    font-weight: 680;
+    letter-spacing: -0.025em;
+  }
+
+  .rep-tool-head-sub {
+    margin-top: 2px;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+  }
+
+  .rep-tool-head-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: none;
+  }
+
+  .rep-tool-body {
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+    padding: 15px;
+    border-radius: 16px;
+  }
+
+  .rep-tool-empty {
+    margin: 0;
+    padding: 22px 14px;
+    color: var(--text-dim);
+    font-size: 0.83rem;
+    text-align: center;
+  }
+
+  /* --- Tracker --- */
+
+  .rep-rank-hero {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+  }
+
+  .rep-rank-badge {
+    display: grid;
+    place-items: center;
+    width: 76px;
+    height: 76px;
+    flex: none;
+    border-radius: 19px;
+    border: 1px solid var(--hairline);
+    background: rgba(255, 255, 255, 0.035);
+    color: var(--text-dim);
+    font-weight: 700;
+  }
+
+  .rep-rank-badge img {
+    width: 64px;
+    height: 64px;
+    object-fit: contain;
+  }
+
+  .rep-rank-name {
+    font-size: clamp(1.1rem, 2.4vw, 1.45rem);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+  }
+
+  .rep-rank-rr {
+    margin-top: 2px;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .rep-rr-bar {
+    height: 6px;
+    margin-top: 8px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.07);
+    overflow: hidden;
+  }
+
+  .rep-rr-fill {
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg,
+      color-mix(in srgb, var(--rank-color, #5bb5ff) 70%, white 10%),
+      var(--rank-color, #5bb5ff));
+    transition: width 620ms var(--ease-out);
+  }
+
+  .rep-session-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+    gap: 8px;
+    margin: 0;
+  }
+
+  .rep-session-stat {
+    padding: 9px 11px;
+    border-radius: 12px;
+    border: 1px solid var(--hairline);
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .rep-session-stat dt {
+    color: var(--text-dim);
+    font-size: 0.58rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .rep-session-stat dd {
+    margin: 4px 0 0;
+    font-size: 1.1rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+
+  .rep-up   { color: #3ddc97; }
+  .rep-down { color: var(--bad); }
+
+  .rep-match-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .rep-match-row {
+    display: grid;
+    grid-template-columns: 3px minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 11px;
+    padding: 8px 11px 8px 8px;
+    border-radius: 12px;
+    border: 1px solid var(--hairline);
+    background: rgba(255, 255, 255, 0.025);
+  }
+
+  .rep-match-flag {
+    align-self: stretch;
+    border-radius: 999px;
+    background: var(--text-dim);
+  }
+
+  .rep-match-row[data-result="win"]  .rep-match-flag { background: #3ddc97; }
+  .rep-match-row[data-result="loss"] .rep-match-flag { background: var(--bad); }
+
+  .rep-match-map {
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .rep-match-when {
+    margin-top: 1px;
+    color: var(--text-dim);
+    font-size: 0.7rem;
+  }
+
+  .rep-match-rr {
+    font-size: 0.9rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .rep-match-tier {
+    color: var(--text-dim);
+    font-size: 0.72rem;
+    text-align: right;
+  }
+
+  /* --- Auto-queue --- */
+
+  .rep-queue-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+  }
+
+  .rep-queue-chip {
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--hairline);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 200ms var(--ease), color 200ms var(--ease), background 200ms var(--ease);
+  }
+
+  .rep-queue-chip:hover {
+    border-color: var(--hairline-strong);
+    color: var(--text);
+  }
+
+  .rep-queue-chip.is-active {
+    border-color: color-mix(in srgb, var(--brand) 55%, transparent);
+    background: color-mix(in srgb, var(--brand) 16%, transparent);
+    color: var(--text);
+  }
+
+  .rep-party-line {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    color: var(--text-dim);
+    font-size: 0.76rem;
+  }
+
+  .rep-toggle-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
+    padding: 11px;
+    border-radius: 12px;
+    border: 1px solid var(--hairline);
+    background: rgba(255, 255, 255, 0.025);
+    cursor: pointer;
+  }
+
+  .rep-toggle-row input {
+    margin: 2px 0 0;
+    width: 15px;
+    height: 15px;
+    flex: none;
+    accent-color: var(--brand);
+    cursor: pointer;
+  }
+
+  .rep-toggle-title {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+
+  .rep-toggle-hint {
+    display: block;
+    margin-top: 2px;
+    color: var(--text-dim);
+    font-size: 0.74rem;
+    line-height: 1.4;
   }
 
   /* --- Toolbar --- */
@@ -1832,13 +2269,22 @@
   }
 
   /* The app is a resizable desktop window and never has to do this; on a
-     phone the panel moves under the grid instead of beside it. */
+     phone the panel moves under the grid instead of beside it. The two-column
+     split lives on the instalock view now, so that is what has to collapse --
+     stacking .rep alone would leave the grid squeezed into a sliver. */
   @media (max-width: 760px) {
     .rep {
-      grid-template-columns: minmax(0, 1fr);
-      grid-template-rows: auto minmax(12rem, 1fr) auto;
       height: auto;
       max-height: none;
+    }
+
+    .rep-view-instalock {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: minmax(12rem, 1fr) auto;
+    }
+
+    .rep-viewport {
+      min-height: 24rem;
     }
 
     .rep-grid-scroll {

@@ -6,8 +6,8 @@
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#07080b">
 
-<title>Astral — instant VALORANT agent lock for Windows</title>
-<meta name="description" content="Astral listens to Valorant's local client API and locks your agent the second pre-game opens. Per-map overrides, millisecond timing, a local REST API, and a single 62 MB exe.">
+<title>Astral — a VALORANT multitool for Windows</title>
+<meta name="description" content="Three tools in one window: instalock your agent the second pre-game opens, track rank and RR across a session, and let the queue run itself. Reads Valorant's local client API. Single 62 MB exe.">
 
 <link rel="canonical" href="https://crzx1337.github.io/Astral-ValoTool/">
 <link rel="icon" href="assets/img/favicon.ico" sizes="any">
@@ -16,16 +16,16 @@
 
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Astral">
-<meta property="og:title" content="Astral — instant VALORANT agent lock for Windows">
-<meta property="og:description" content="Lock your Valorant agent before anyone else in the lobby finishes loading. Per-map overrides, millisecond timing, and a local REST API.">
+<meta property="og:title" content="Astral — a VALORANT multitool for Windows">
+<meta property="og:description" content="Instalock, rank tracker and auto-queue in one window, driven by Valorant's local client API.">
 <meta property="og:url" content="https://crzx1337.github.io/Astral-ValoTool/">
 <meta property="og:image" content="https://crzx1337.github.io/Astral-ValoTool/assets/img/shot-main.png">
 <meta property="og:image:width" content="1920">
 <meta property="og:image:height" content="1009">
 <meta property="og:image:alt" content="The Astral desktop interface, showing the agent grid and the target agent panel.">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Astral — instant VALORANT agent lock for Windows">
-<meta name="twitter:description" content="Lock your Valorant agent before anyone else in the lobby finishes loading.">
+<meta name="twitter:title" content="Astral — a VALORANT multitool for Windows">
+<meta name="twitter:description" content="Instalock, rank tracker and auto-queue in one window, driven by Valorant's local client API.">
 <meta name="twitter:image" content="https://crzx1337.github.io/Astral-ValoTool/assets/img/shot-main.png">
 
 <link rel="stylesheet" href="css/tokens.css">
@@ -107,13 +107,13 @@
         <p class="eyebrow reveal" style="--i:0">VALORANT · Windows · MIT</p>
 
         <h1 id="hero-title" class="reveal" style="--i:1">
-          Lock your Valorant agent <em>before anyone else in the lobby finishes loading.</em>
+          A Valorant multitool that <em>talks straight to your local client.</em>
         </h1>
 
         <p class="hero-sub reveal" style="--i:2">
-          Picking an agent in pre-game usually comes down to whose client loaded first and who moved
-          their mouse fastest. Astral listens to Valorant's local client API instead, and hovers and
-          locks your agent the second pre-game opens.
+          Three tools in one window: instalock your agent the second pre-game opens, watch your rank
+          and RR across a session, and let the queue run itself. All of it reads the local client API —
+          no login, no credentials, nothing but the tokens the game already holds.
         </p>
 
         <div class="hero-cta reveal" style="--i:3">
@@ -145,7 +145,7 @@
           <span class="liquid-sheet" aria-hidden="true"></span>
 
           <div class="hero-card-head">
-            <p class="eyebrow">Target agent</p>
+            <p class="eyebrow">Toolkit</p>
             <span class="pill phase-pill">
               <span class="phase-dot" aria-hidden="true"></span>
               <span id="hero-phase-label">Idle</span>
@@ -158,9 +158,9 @@
           </div>
 
           <dl class="hero-card-rows">
-            <div><dt>Loop</dt><dd class="is-phase" id="hero-loop">Standby</dd></div>
-            <div><dt>Hover delay</dt><dd>0 ms</dd></div>
-            <div><dt>Endpoint</dt><dd>127.0.0.1</dd></div>
+            <div><dt>Instalock</dt><dd class="is-phase" id="hero-loop">Standby</dd></div>
+            <div><dt>Rank tracker</dt><dd>Ready</dd></div>
+            <div><dt>Auto-queue</dt><dd>Idle</dd></div>
           </dl>
         </div>
       </div>
@@ -182,16 +182,16 @@
           <dt>Minimum delay</dt>
         </div>
         <div class="stat">
-          <dd><b data-count="8">0</b></dd>
-          <dt>API routes</dt>
+          <dd><b data-count="3">0</b></dd>
+          <dt>Tools</dt>
         </div>
         <div class="stat">
           <dd><b data-count="62">0</b><i> MB</i></dd>
           <dt>Single file</dt>
         </div>
         <div class="stat">
-          <dd><b data-count="1">0</b></dd>
-          <dt>Process</dt>
+          <dd><b data-count="15">0</b></dd>
+          <dt>API routes</dt>
         </div>
       </dl>
     </div>
@@ -202,11 +202,11 @@
     <div class="shell">
       <div class="section-head reveal">
         <p class="eyebrow">Features</p>
-        <h2 id="features-title">One process, and it does the waiting for you.</h2>
+        <h2 id="features-title">Three tools, one process, no waiting around.</h2>
         <p class="lede">
-          It's one C# app: an embedded ASP.NET Core Web API behind a native WebView2 window. Use the
-          dark-mode desktop UI, or skip it entirely and talk to the local REST endpoints from your
-          own scripts.
+          It's one C# app: an embedded ASP.NET Core Web API behind a native WebView2 window. Open the
+          home menu and pick a tool, or skip the UI entirely and drive the local REST endpoints from
+          your own scripts.
         </p>
       </div>
 
@@ -224,30 +224,31 @@
           </p>
           <div class="feature-tags">
             <span class="pill">Pre-game detection</span>
-            <span class="pill">Auto hover + lock</span>
+            <span class="pill">Per-map overrides</span>
+            <span class="pill">0&ndash;10&nbsp;000 ms timing</span>
             <span class="pill">Match de-duped</span>
           </div>
         </article>
 
         <article class="feature glass glass-rim lit tilt reveal" data-role="controller" data-tilt style="--i:1">
           <div class="feature-icon tilt-lift">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3 3 5.5v15L9 18l6 3 6-2.5v-15L15 6 9 3zM9 3v15M15 6v15"/></svg>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5M4 19h16m-12.5-4 3.5-4 3 2.5L20 7"/></svg>
           </div>
-          <h3>Per-map overrides</h3>
+          <h3>Rank &amp; session tracker</h3>
           <p>
-            Sova on Ascent, Viper on Breeze, Omen on Lotus, and your main everywhere else. Astral
-            resolves the map before it picks.
+            Current tier and RR, wins and losses since you sat down, and the RR delta on every recent
+            competitive match. Refreshes when you ask it to, never on a timer.
           </p>
         </article>
 
         <article class="feature glass glass-rim lit tilt reveal" data-role="initiator" data-tilt style="--i:2">
           <div class="feature-icon tilt-lift">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/></svg>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h11M4 12h7M4 17h11m6-8 3 3-3 3"/></svg>
           </div>
-          <h3>Millisecond timing</h3>
+          <h3>Auto-queue</h3>
           <p>
-            Hover, lock, and post-lock delays in milliseconds if you want the pick to look less
-            instant. Anything from 0 to 10&nbsp;000 ms.
+            Requeues when a match ends, confirms the party ready check, and picks the queue. It refuses
+            to queue mid-match and stops itself after a set number of games.
           </p>
         </article>
 
@@ -257,8 +258,8 @@
           </div>
           <h3>Live state stream</h3>
           <p>
-            Server-Sent Events on <code>/api/state/stream</code>, so the UI and any external client
-            stay current without polling.
+            One Server-Sent Events feed on <code>/api/events</code> carries every tool's state, tagged
+            by module — so the UI and any external client stay current without polling.
           </p>
         </article>
 
@@ -268,7 +269,7 @@
           </div>
           <h3>Keeps running in the tray</h3>
           <p>
-            Closing the window sends Astral to the system tray. The lock loop keeps running — right-click
+            Closing the window sends Astral to the system tray. Any running loop keeps going — right-click
             the icon to stop or exit.
           </p>
         </article>
@@ -279,8 +280,8 @@
           </div>
           <h3>Real agent art</h3>
           <p>
-            Agent portraits and role icons are fetched from <code>valorant-api.com</code> at runtime,
-            so a new agent shows up without an update.
+            Agent portraits, role icons and rank badges are fetched from <code>valorant-api.com</code>
+            at runtime, so a new agent or tier shows up without an update.
           </p>
         </article>
 
@@ -305,7 +306,7 @@
     <div class="shell">
       <div class="section-head reveal">
         <p class="eyebrow">How it works</p>
-        <h2 id="how-title">Four steps, then you stop thinking about it.</h2>
+        <h2 id="how-title">Open it, pick a tool, stop thinking about it.</h2>
       </div>
 
       <div class="steps-layout">
@@ -341,10 +342,10 @@
           <li class="step reveal" data-step="2" data-phase="idle" data-caption="Pick your main" data-phase-label="Idle">
             <span class="step-num" aria-hidden="true">2</span>
             <div>
-              <h3>Pick your main</h3>
+              <h3>Pick a tool from the home menu</h3>
               <p>
-                Choose from the agent grid. Press <kbd>/</kbd> to jump straight to the search box, and
-                add per-map overrides if you swap agents depending on the map.
+                Instalock, rank tracker, or auto-queue. Each one is its own screen with its own live
+                status, and the home cards show what every tool is doing without opening them.
               </p>
             </div>
           </li>
@@ -352,10 +353,10 @@
           <li class="step reveal" data-step="3" data-phase="monitoring" data-caption="Watching pre-game" data-phase-label="Monitoring">
             <span class="step-num" aria-hidden="true">3</span>
             <div>
-              <h3>Hit Start Locking</h3>
+              <h3>Arm the loop</h3>
               <p>
-                Astral watches your local game client and fires when pre-game starts — hover, then
-                lock, on whatever delays you set.
+                Instalock watches for pre-game and fires — hover, then lock, on whatever delays you set.
+                Auto-queue watches for the end of a match and puts you back in.
               </p>
             </div>
           </li>
@@ -365,7 +366,7 @@
             <div>
               <h3>Close the window</h3>
               <p>
-                It minimizes to the notification tray and keeps going. The loop survives the window,
+                It minimizes to the notification tray and keeps going. The loops survive the window,
                 so the next queue is already covered.
               </p>
             </div>
@@ -380,19 +381,20 @@
     <div class="shell">
       <div class="section-head reveal">
         <p class="eyebrow">Interactive preview</p>
-        <h2 id="demo-title">The agent grid, running right here.</h2>
+        <h2 id="demo-title">The whole multitool, running right here.</h2>
         <p class="lede">
-          The whole desktop UI, rebuilt and running here. Search, filter by role, pick a target and
-          arm the loop — then open Settings and it all works: timing sliders, per-map overrides,
-          the lot. Your settings persist and actually drive the loop.
+          The whole desktop UI, rebuilt and running here — home menu and all three tools. Pick a
+          target and arm the lock loop, load the rank tracker, or start auto-queue and watch the
+          requeue limit trip. The instalocker's Settings dialog is fully wired, and what you save
+          persists and actually drives the loop.
         </p>
       </div>
 
       <p class="demo-note reveal">
         <span class="pill">Preview</span>
-        <span>Simulated — there is no game client in a browser tab, so pre-game is faked on a map
-        rotation. Everything else is the real interface, and the phases, labels and status lines are
-        the ones the app reports.</span>
+        <span>Simulated — there is no game client in a browser tab, so pre-game runs on a map
+        rotation and the tracker shows a stand-in session. Everything else is the real interface, and
+        the views, phases, labels and status lines are the ones the app reports.</span>
       </p>
 
       <!-- Replica of the app shell. Class names are prefixed rep- so they can
@@ -400,13 +402,17 @@
       <!-- id is demo-app, not demo: the enclosing <section> already owns #demo
            as the nav anchor, and a duplicate id makes getElementById pick the
            section instead of this. -->
-      <div class="rep reveal" id="demo-app" data-phase="idle" data-role="unknown">
+      <div class="rep reveal" id="demo-app" data-phase="idle" data-role="unknown" data-view="home">
         <header class="rep-topbar rep-glass">
           <div class="rep-brand">
+            <button class="rep-back" type="button" id="demo-back" hidden>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.4 7.4 14 6l-6 6 6 6 1.4-1.4-4.6-4.6z"/></svg>
+              Home
+            </button>
             <img class="rep-brand-mark" src="assets/img/logo-256.png" alt="" width="34" height="34" decoding="async">
             <span class="rep-brand-text">
               <strong>Valorant</strong>
-              <span>Astral</span>
+              <span id="demo-brand">Astral</span>
             </span>
           </div>
 
@@ -416,68 +422,219 @@
               <span class="rep-phase-dot" aria-hidden="true"></span>
               <span id="demo-phase">Idle</span>
             </span>
-            <button class="rep-icon-btn" type="button" id="demo-settings-open" aria-label="Settings" aria-haspopup="dialog">
+            <button class="rep-icon-btn" type="button" id="demo-settings-open" aria-label="Instalocker settings" aria-haspopup="dialog" hidden>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54A.48.48 0 0 0 13.9 2h-3.8a.48.48 0 0 0-.47.41l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.47a.48.48 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.8c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/></svg>
             </button>
           </div>
         </header>
 
-        <div class="rep-browser">
-          <div class="rep-toolbar rep-glass">
-            <label class="rep-search" for="demo-search">
-              <svg class="rep-search-icon" viewBox="0 0 20 20" aria-hidden="true">
-                <circle cx="9" cy="9" r="6"></circle>
-                <line x1="13.5" y1="13.5" x2="17.5" y2="17.5"></line>
-              </svg>
-              <input id="demo-search" type="search" placeholder="Search agents" autocomplete="off" spellcheck="false" aria-label="Search agents">
-              <kbd class="rep-search-key" aria-hidden="true">/</kbd>
-            </label>
+        <div class="rep-viewport">
+          <!-- ---------- Home ---------- -->
+          <section class="rep-view rep-home" id="demo-view-home" data-view="home">
+            <div class="rep-home-head">
+              <h3 class="rep-home-title">Your Valorant toolkit</h3>
+              <p class="rep-home-sub">Everything talks to your local client. Pick a tool to get started.</p>
+            </div>
 
-            <div class="rep-filters" id="demo-filters" role="group" aria-label="Filter by role"></div>
-            <span class="rep-count" id="demo-count" aria-live="polite"></span>
-          </div>
+            <div class="rep-tool-grid">
+              <button class="rep-tool-card rep-glass" type="button" data-goto="instalock" style="--i:0">
+                <span class="rep-tool-icon">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8.5 10.5V7a3.5 3.5 0 0 1 7 0v3.5"/></svg>
+                </span>
+                <span class="rep-tool-name">Instalock</span>
+                <span class="rep-tool-desc">Lock your agent the moment pre-game opens, with per-map overrides.</span>
+                <span class="rep-tool-status" id="demo-status-instalock" data-live="off">
+                  <span class="rep-tool-dot" aria-hidden="true"></span><span>Idle</span>
+                </span>
+              </button>
 
-          <div class="rep-grid-scroll">
-            <div class="agent-grid" id="demo-grid" role="listbox" aria-label="Agents" tabindex="0"></div>
-            <p class="rep-grid-empty" id="demo-empty" hidden></p>
-          </div>
+              <button class="rep-tool-card rep-glass" type="button" data-goto="tracker" style="--i:1">
+                <span class="rep-tool-icon">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5"/><path d="M4 19h16"/><path d="m7.5 15 3.5-4 3 2.5L20 7"/></svg>
+                </span>
+                <span class="rep-tool-name">Rank tracker</span>
+                <span class="rep-tool-desc">Current rank, RR, and how this session has actually gone.</span>
+                <span class="rep-tool-status" id="demo-status-tracker" data-live="off">
+                  <span class="rep-tool-dot" aria-hidden="true"></span><span>Not loaded</span>
+                </span>
+              </button>
+
+              <button class="rep-tool-card rep-glass" type="button" data-goto="autoqueue" style="--i:2">
+                <span class="rep-tool-icon">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h11"/><path d="M4 12h7"/><path d="M4 17h11"/><path d="m17 9 3 3-3 3"/></svg>
+                </span>
+                <span class="rep-tool-name">Auto-queue</span>
+                <span class="rep-tool-desc">Requeue after a match, ready up on its own, and pick the queue.</span>
+                <span class="rep-tool-status" id="demo-status-autoqueue" data-live="off">
+                  <span class="rep-tool-dot" aria-hidden="true"></span><span>Idle</span>
+                </span>
+              </button>
+            </div>
+          </section>
+
+          <!-- ---------- Instalock ---------- -->
+          <section class="rep-view rep-view-instalock" id="demo-view-instalock" data-view="instalock" hidden>
+            <div class="rep-browser">
+              <div class="rep-toolbar rep-glass">
+                <label class="rep-search" for="demo-search">
+                  <svg class="rep-search-icon" viewBox="0 0 20 20" aria-hidden="true">
+                    <circle cx="9" cy="9" r="6"></circle>
+                    <line x1="13.5" y1="13.5" x2="17.5" y2="17.5"></line>
+                  </svg>
+                  <input id="demo-search" type="search" placeholder="Search agents" autocomplete="off" spellcheck="false" aria-label="Search agents">
+                  <kbd class="rep-search-key" aria-hidden="true">/</kbd>
+                </label>
+
+                <div class="rep-filters" id="demo-filters" role="group" aria-label="Filter by role"></div>
+                <span class="rep-count" id="demo-count" aria-live="polite"></span>
+              </div>
+
+              <div class="rep-grid-scroll">
+                <div class="agent-grid" id="demo-grid" role="listbox" aria-label="Agents" tabindex="0"></div>
+                <p class="rep-grid-empty" id="demo-empty" hidden></p>
+              </div>
+            </div>
+
+            <aside class="rep-panel rep-glass">
+              <div class="rep-hero-art" id="demo-art" data-art="none">
+                <img class="rep-hero-portrait" id="demo-portrait" alt="" decoding="async" hidden>
+                <img class="rep-hero-watermark" id="demo-watermark" src="assets/img/logo-256.png" alt="">
+                <span class="rep-hero-monogram" id="demo-monogram" aria-hidden="true">?</span>
+                <span class="rep-hero-badge" id="demo-badge" hidden>Locked</span>
+              </div>
+
+              <div class="rep-identity">
+                <p class="rep-eyebrow">Target agent</p>
+                <p class="rep-name" id="demo-name">No agent selected</p>
+                <span class="rep-role-chip" id="demo-role" hidden></span>
+              </div>
+
+              <div class="rep-status">
+                <p class="rep-status-line" id="demo-status" aria-live="polite">Waiting…</p>
+                <dl class="rep-meta">
+                  <div>
+                    <dt>Loop</dt>
+                    <dd id="demo-loop">Standby</dd>
+                  </div>
+                  <div>
+                    <dt>Updated</dt>
+                    <dd id="demo-updated">—</dd>
+                  </div>
+                </dl>
+              </div>
+
+              <div class="rep-actions">
+                <button class="rep-btn rep-btn-primary" type="button" id="demo-start" disabled>
+                  <span id="demo-start-label">Start locking</span>
+                </button>
+                <button class="rep-btn rep-btn-ghost" type="button" id="demo-stop" disabled>Stop</button>
+              </div>
+            </aside>
+          </section>
+
+          <!-- ---------- Rank tracker ---------- -->
+          <section class="rep-view rep-view-tool" id="demo-view-tracker" data-view="tracker" hidden>
+            <header class="rep-tool-head rep-glass">
+              <div>
+                <div class="rep-tool-head-title">Rank &amp; session</div>
+                <div class="rep-tool-head-sub" id="demo-tracker-updated">Not loaded yet.</div>
+              </div>
+              <div class="rep-tool-head-actions">
+                <button class="rep-btn-quiet" type="button" id="demo-tracker-reset">Reset session</button>
+                <button class="rep-btn rep-btn-ghost rep-btn-compact" type="button" id="demo-tracker-refresh">
+                  <span id="demo-tracker-refresh-label">Refresh</span>
+                </button>
+              </div>
+            </header>
+
+            <section class="rep-tool-body rep-glass" id="demo-rank-card" hidden>
+              <div class="rep-rank-hero">
+                <div class="rep-rank-badge"><img id="demo-rank-icon" alt="" hidden><span id="demo-rank-fallback">—</span></div>
+                <div class="rep-rank-meta">
+                  <div class="rep-rank-name" id="demo-rank-name">Unranked</div>
+                  <div class="rep-rank-rr" id="demo-rank-rr">0 RR</div>
+                  <div class="rep-rr-bar"><div class="rep-rr-fill" id="demo-rank-fill" style="width:0%"></div></div>
+                </div>
+              </div>
+
+              <dl class="rep-session-grid">
+                <div class="rep-session-stat"><dt>Wins</dt><dd id="demo-session-wins">0</dd></div>
+                <div class="rep-session-stat"><dt>Losses</dt><dd id="demo-session-losses">0</dd></div>
+                <div class="rep-session-stat"><dt>Net RR</dt><dd id="demo-session-rr">0</dd></div>
+                <div class="rep-session-stat"><dt>Played</dt><dd id="demo-session-played">0</dd></div>
+              </dl>
+            </section>
+
+            <section class="rep-tool-body rep-glass">
+              <div class="rep-tool-head-title">Recent competitive</div>
+              <div class="rep-match-list" id="demo-match-list"></div>
+              <p class="rep-tool-empty" id="demo-match-empty">Refresh to load your recent matches.</p>
+            </section>
+          </section>
+
+          <!-- ---------- Auto-queue ---------- -->
+          <section class="rep-view rep-view-tool" id="demo-view-autoqueue" data-view="autoqueue" hidden>
+            <header class="rep-tool-head rep-glass">
+              <div>
+                <div class="rep-tool-head-title">Auto-queue</div>
+                <div class="rep-tool-head-sub" id="demo-queue-status">Idle.</div>
+              </div>
+              <div class="rep-tool-head-actions">
+                <button class="rep-btn rep-btn-primary rep-btn-compact" type="button" id="demo-queue-start">
+                  <span id="demo-queue-start-label">Start</span>
+                </button>
+                <button class="rep-btn rep-btn-ghost rep-btn-compact" type="button" id="demo-queue-stop" disabled>Stop</button>
+              </div>
+            </header>
+
+            <section class="rep-tool-body rep-glass">
+              <div class="rep-tool-head-title">Queue</div>
+              <div class="rep-queue-picker" id="demo-queue-picker"></div>
+              <div class="rep-party-line">
+                <span id="demo-party-state">Party: DEFAULT</span>
+                <span id="demo-party-queue"></span>
+              </div>
+            </section>
+
+            <section class="rep-tool-body rep-glass">
+              <div class="rep-tool-head-title">Automation</div>
+
+              <label class="rep-toggle-row">
+                <input type="checkbox" id="demo-opt-requeue">
+                <span>
+                  <span class="rep-toggle-title">Requeue after a match</span>
+                  <span class="rep-toggle-hint">Re-enters the queue once the match ends and you are back in the menus.</span>
+                </span>
+              </label>
+
+              <label class="rep-toggle-row">
+                <input type="checkbox" id="demo-opt-ready">
+                <span>
+                  <span class="rep-toggle-title">Ready up automatically</span>
+                  <span class="rep-toggle-hint">Confirms the party ready check without you having to be at the window.</span>
+                </span>
+              </label>
+
+              <div class="rep-slider-row">
+                <span class="rep-slider-label"><label for="demo-opt-delay">Requeue delay</label></span>
+                <input class="rep-slider" id="demo-opt-delay" type="range" min="0" max="60000" step="500" value="5000">
+                <input class="rep-slider-value" id="demo-opt-delay-value" type="number" min="0" max="60000" step="500" value="5000" aria-label="Requeue delay in milliseconds">
+                <span class="rep-slider-unit">ms</span>
+              </div>
+
+              <div class="rep-slider-row">
+                <span class="rep-slider-label">
+                  <label for="demo-opt-max">Stop after</label>
+                  <button class="rep-tip" type="button" aria-label="About the requeue limit"
+                          data-tip="How many times in a row auto-queue may requeue before it stops on its own. Keeps an unattended machine from queueing all night.">?</button>
+                </span>
+                <input class="rep-slider" id="demo-opt-max" type="range" min="1" max="20" step="1" value="3">
+                <input class="rep-slider-value" id="demo-opt-max-value" type="number" min="1" max="20" step="1" value="3" aria-label="Maximum consecutive requeues">
+                <span class="rep-slider-unit">games</span>
+              </div>
+            </section>
+          </section>
         </div>
-
-        <aside class="rep-panel rep-glass">
-          <div class="rep-hero-art" id="demo-art" data-art="none">
-            <img class="rep-hero-portrait" id="demo-portrait" alt="" decoding="async" hidden>
-            <img class="rep-hero-watermark" id="demo-watermark" src="assets/img/logo-256.png" alt="">
-            <span class="rep-hero-monogram" id="demo-monogram" aria-hidden="true">?</span>
-            <span class="rep-hero-badge" id="demo-badge" hidden>Locked</span>
-          </div>
-
-          <div class="rep-identity">
-            <p class="rep-eyebrow">Target agent</p>
-            <p class="rep-name" id="demo-name">No agent selected</p>
-            <span class="rep-role-chip" id="demo-role" hidden></span>
-          </div>
-
-          <div class="rep-status">
-            <p class="rep-status-line" id="demo-status" aria-live="polite">Waiting…</p>
-            <dl class="rep-meta">
-              <div>
-                <dt>Loop</dt>
-                <dd id="demo-loop">Standby</dd>
-              </div>
-              <div>
-                <dt>Updated</dt>
-                <dd id="demo-updated">—</dd>
-              </div>
-            </dl>
-          </div>
-
-          <div class="rep-actions">
-            <button class="rep-btn rep-btn-primary" type="button" id="demo-start" disabled>
-              <span id="demo-start-label">Start locking</span>
-            </button>
-            <button class="rep-btn rep-btn-ghost" type="button" id="demo-stop" disabled>Stop</button>
-          </div>
-        </aside>
 
         <!-- Settings dialog, mirroring the app's. Scoped inside .rep so it
              covers the replica rather than the page. -->
@@ -559,6 +716,7 @@
       <div class="section-head reveal">
         <p class="eyebrow">Screenshots</p>
         <h2 id="shots-title">Dark, dense, and out of your way.</h2>
+        <p class="lede">The instalocker and its settings dialog. The home menu and the other two tools are in the live demo above.</p>
       </div>
 
       <div class="shots">
@@ -600,8 +758,9 @@
         <h2 id="api-title">Drive it from your own scripts.</h2>
         <p class="lede">
           On startup, Astral binds Kestrel to a random loopback port. It's <code>127.0.0.1</code>
-          only, so nothing on your network can reach it. From there you can drive or watch the lock
-          loop yourself.
+          only, so nothing on your network can reach it, and the state-changing routes reject any
+          request carrying a foreign <code>Origin</code> header. Scripts don't send one, so
+          <code>curl</code> and PowerShell work as-is.
         </p>
       </div>
 
@@ -620,8 +779,8 @@
             <p>Current lock state</p>
           </div>
           <div class="route">
-            <p class="route-head"><span class="verb" data-verb="GET">GET</span><span class="route-path">/api/state/stream</span></p>
-            <p>The same state pushed on every change (SSE), with <code>: ping</code> keepalives in between</p>
+            <p class="route-head"><span class="verb" data-verb="GET">GET</span><span class="route-path">/api/events</span></p>
+            <p>Every tool's state pushed on every change (SSE), tagged by module</p>
           </div>
           <div class="route">
             <p class="route-head"><span class="verb" data-verb="POST">POST</span><span class="route-path">/api/lock</span></p>
@@ -638,6 +797,34 @@
           <div class="route">
             <p class="route-head"><span class="verb" data-verb="PATCH">PATCH</span><span class="route-path">/api/options</span></p>
             <p>Partial settings update, validated and persisted</p>
+          </div>
+          <div class="route">
+            <p class="route-head"><span class="verb" data-verb="GET">GET</span><span class="route-path">/api/tracker</span></p>
+            <p>Rank, session totals and recent competitive matches</p>
+          </div>
+          <div class="route">
+            <p class="route-head"><span class="verb" data-verb="POST">POST</span><span class="route-path">/api/tracker/refresh</span></p>
+            <p>Re-read rank and match history from Riot</p>
+          </div>
+          <div class="route">
+            <p class="route-head"><span class="verb" data-verb="POST">POST</span><span class="route-path">/api/tracker/session/reset</span></p>
+            <p>Re-anchor the session to now</p>
+          </div>
+          <div class="route">
+            <p class="route-head"><span class="verb" data-verb="GET">GET</span><span class="route-path">/api/autoqueue</span></p>
+            <p>Auto-queue state, party state and eligible queues</p>
+          </div>
+          <div class="route">
+            <p class="route-head"><span class="verb" data-verb="POST">POST</span><span class="route-path">/api/autoqueue/start</span></p>
+            <p>Run the automation loop</p>
+          </div>
+          <div class="route">
+            <p class="route-head"><span class="verb" data-verb="POST">POST</span><span class="route-path">/api/autoqueue/queueing</span></p>
+            <p>Enter or leave the queue right now</p>
+          </div>
+          <div class="route">
+            <p class="route-head"><span class="verb" data-verb="PATCH">PATCH</span><span class="route-path">/api/autoqueue/options</span></p>
+            <p>Auto-queue settings and the queue list</p>
           </div>
         </div>
 
@@ -816,9 +1003,10 @@ cd Astral-ValoTool</code></pre>
             <summary>What is it actually doing?</summary>
             <div>
               <p>
-                Astral talks to the Valorant client's own local API through RadiantConnect. It
-                subscribes to pre-game events, and when one fires it calls select and then lock on
-                your chosen agent. No screen reading, no input simulation.
+                Astral talks to the Valorant client's own local API through RadiantConnect. Instalock
+                subscribes to pre-game events and calls select then lock; the tracker reads your MMR and
+                competitive updates; auto-queue drives the party endpoints. No screen reading, no input
+                simulation, and no account login &mdash; it uses the tokens the running client already holds.
               </p>
               <p>Use at your own discretion.</p>
             </div>
@@ -861,7 +1049,7 @@ cd Astral-ValoTool</code></pre>
             <summary>Do I have to keep the window open?</summary>
             <div>
               <p>
-                No. Closing it sends Astral to the notification tray and the lock loop keeps running.
+                No. Closing it sends Astral to the notification tray and any running loop keeps going.
                 Right-click the tray icon for <b>Open</b>, <b>Stop locking</b> or <b>Exit</b>.
               </p>
             </div>

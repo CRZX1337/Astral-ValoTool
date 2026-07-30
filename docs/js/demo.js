@@ -1,13 +1,19 @@
-/* Interactive agent grid — a replica of Astral's desktop UI.
+/* Interactive multitool — a replica of Astral's desktop UI.
 
-   Portraits come from valorant-api.com, the same source the real app uses at
-   runtime. The lock sequence is simulated (there is no game client in a
-   browser tab) but every phase, loop label and status string below is one the
-   app actually reports, so what you see here is what you get. */
+   Portraits and rank badges come from valorant-api.com, the same source the
+   real app uses at runtime. The game side is simulated (there is no Valorant
+   client in a browser tab), but every view, phase, loop label and status string
+   below is one the app actually renders, so what you see here is what you get.
+
+   Sections: 1. data  2. shell/routing  3. instalock  4. tracker  5. auto-queue */
 
 import { loadConfig, initSettings } from "./settings.js";
 
-const API = "https://valorant-api.com/v1/agents?isPlayableCharacter=true";
+const AGENTS_API = "https://valorant-api.com/v1/agents?isPlayableCharacter=true";
+const TIERS_API = "https://valorant-api.com/v1/competitivetiers";
+const CACHE_KEY = "astral:agents";
+const TIER_CACHE_KEY = "astral:tiers";
+const TIMEOUT = 4000;
 
 /* Maps the simulated pre-game can open on. Drawn from the same table the
    settings dialog offers, minus the two non-competitive ones. */
@@ -15,8 +21,6 @@ const ROTATION = [
   "Ascent", "Bind", "Haven", "Split", "Lotus", "Sunset",
   "Icebox", "Breeze", "Fracture", "Pearl", "Abyss", "Corrode",
 ];
-const CACHE_KEY = "astral:agents";
-const TIMEOUT = 4000;
 
 /* Offline fallback: the exact 29 entries of RadiantConnect's agent enum
    (v10.6.1), with roles as valorant-api reports them. Used when the API is
@@ -36,6 +40,25 @@ const FALLBACK = [
 
 const ROLES = ["All", "Duelist", "Initiator", "Controller", "Sentinel"];
 
+/* The seven QueueId values RadiantConnect exposes, with the names the app's
+   picker shows. */
+const QUEUES = [
+  ["unrated", "Unrated"], ["competitive", "Competitive"], ["swiftplay", "Swiftplay"],
+  ["spikerush", "Spike Rush"], ["deathmatch", "Deathmatch"], ["ggteam", "Escalation"],
+  ["hurm", "Team Deathmatch"],
+].map(([id, name]) => ({ id, name }));
+
+/* A plausible competitive session, standing in for what
+   FetchCompetitveUpdatesAsync returns. Newest first, as the app sorts them. */
+const DEMO_RANK = { tierName: "Ascendant 2", rr: 64 };
+const DEMO_MATCHES = [
+  { map: "Lotus", rr: +23, tier: "Ascendant 2", ago: 18 },
+  { map: "Ascent", rr: +19, tier: "Ascendant 1", ago: 61 },
+  { map: "Icebox", rr: -16, tier: "Ascendant 1", ago: 104 },
+  { map: "Sunset", rr: +21, tier: "Ascendant 1", ago: 152 },
+  { map: "Breeze", rr: -14, tier: "Ascendant 1", ago: 203 },
+];
+
 /* Same rule as the app's grid: split on non-alphanumerics so "KAY/O" reads
    as "KO", and a plain name falls back to its first letter. */
 function monogram(name) {
@@ -43,8 +66,7 @@ function monogram(name) {
   return (parts.length > 1 ? parts.slice(0, 2).map((p) => p[0]).join("") : name[0]).toUpperCase();
 }
 
-const clock = () =>
-  new Date().toLocaleTimeString("en-GB", { hour12: false });
+const clock = () => new Date().toLocaleTimeString("en-GB", { hour12: false });
 
 /* One retry that bypasses the HTTP cache. A stale or partially-written cache
    entry for this URL otherwise fails every load for the life of the browser
@@ -63,24 +85,31 @@ async function request(url, signal) {
   }
 }
 
-async function loadAgents() {
-  const cached = sessionStorage.getItem(CACHE_KEY);
+async function cachedJson(url, key) {
+  const cached = sessionStorage.getItem(key);
   if (cached) {
     try {
-      const parsed = JSON.parse(cached);
-      if (Array.isArray(parsed) && parsed.length) return { agents: parsed, live: true };
+      return JSON.parse(cached);
     } catch {
-      sessionStorage.removeItem(CACHE_KEY);
+      sessionStorage.removeItem(key);
     }
   }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT);
-
   try {
-    const response = await request(API, controller.signal);
+    const data = await (await request(url, controller.signal)).json();
+    sessionStorage.setItem(key, JSON.stringify(data));
+    return data;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
-    const agents = (await response.json()).data
+async function loadAgents() {
+  try {
+    const payload = await cachedJson(AGENTS_API, CACHE_KEY);
+    const agents = payload.data
       .map((agent) => ({
         name: agent.displayName,
         role: agent.role?.displayName ?? "Unlisted",
@@ -95,32 +124,94 @@ async function loadAgents() {
       .sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }));
 
     if (!agents.length) throw new Error("empty");
-
-    sessionStorage.setItem(CACHE_KEY, JSON.stringify(agents));
     return { agents, live: true };
   } catch {
     return { agents: FALLBACK, live: false };
-  } finally {
-    clearTimeout(timer);
+  }
+}
+
+/* Rank art, resolved the same way the app does it: the newest tier table from
+   valorant-api, keyed by the tier's display name. */
+async function loadTier(tierName) {
+  try {
+    const payload = await cachedJson(TIERS_API, TIER_CACHE_KEY);
+    const table = payload.data?.[payload.data.length - 1];
+    const tier = table?.tiers?.find(
+      (t) => (t.tierName ?? "").trim().toLowerCase() === tierName.toLowerCase()
+    );
+    if (!tier) return null;
+    return {
+      icon: tier.largeIcon ?? tier.smallIcon ?? null,
+      color: tier.color ? `#${tier.color.slice(0, 6)}` : null,
+    };
+  } catch {
+    return null;
   }
 }
 
 export async function initDemo() {
   const root = document.getElementById("demo-app");
   const grid = document.getElementById("demo-grid");
-  const filters = document.getElementById("demo-filters");
-  const search = document.getElementById("demo-search");
-  const count = document.getElementById("demo-count");
-  const empty = document.getElementById("demo-empty");
-  const notice = document.getElementById("demo-notice");
   const template = document.getElementById("agent-card-template");
   if (!root || !grid || !template) return;
+
+  /* ================= 2. Shell and routing ================= */
+
+  const TITLES = {
+    home: "Astral",
+    instalock: "Instalock",
+    tracker: "Rank tracker",
+    autoqueue: "Auto-queue",
+  };
+
+  const views = new Map(
+    [...root.querySelectorAll(".rep-view")].map((el) => [el.dataset.view, el])
+  );
+  const back = document.getElementById("demo-back");
+  const brand = document.getElementById("demo-brand");
+  const gear = document.getElementById("demo-settings-open");
+  const cardStatus = {
+    instalock: document.getElementById("demo-status-instalock"),
+    tracker: document.getElementById("demo-status-tracker"),
+    autoqueue: document.getElementById("demo-status-autoqueue"),
+  };
+
+  let view = "home";
+
+  function setView(next) {
+    if (!views.has(next)) return;
+    view = next;
+    root.dataset.view = next;
+
+    for (const [name, el] of views) el.hidden = name !== next;
+
+    back.hidden = next === "home";
+    brand.textContent = TITLES[next] ?? "Astral";
+    /* The gear only configures the instalocker, exactly as in the app. */
+    gear.hidden = next !== "instalock";
+
+    /* Opening the tracker loads it, the way the app refreshes on view entry. */
+    if (next === "tracker" && !trackerLoaded && !trackerBusy) refreshTracker();
+  }
+
+  for (const card of root.querySelectorAll("[data-goto]")) {
+    card.addEventListener("click", () => setView(card.dataset.goto));
+  }
+  back.addEventListener("click", () => setView("home"));
+
+  function paintCard(key, text, live) {
+    const el = cardStatus[key];
+    if (!el) return;
+    el.dataset.live = live ? "on" : "off";
+    el.lastElementChild.textContent = text;
+  }
+
+  /* ================= 3. Instalock ================= */
 
   const panel = {
     phase: document.getElementById("demo-phase"),
     art: document.getElementById("demo-art"),
     portrait: document.getElementById("demo-portrait"),
-    watermark: document.getElementById("demo-watermark"),
     monogram: document.getElementById("demo-monogram"),
     badge: document.getElementById("demo-badge"),
     name: document.getElementById("demo-name"),
@@ -132,6 +223,12 @@ export async function initDemo() {
     startLabel: document.getElementById("demo-start-label"),
     stop: document.getElementById("demo-stop"),
   };
+
+  const filters = document.getElementById("demo-filters");
+  const search = document.getElementById("demo-search");
+  const count = document.getElementById("demo-count");
+  const empty = document.getElementById("demo-empty");
+  const notice = document.getElementById("demo-notice");
 
   /* Skeletons while the request is in flight, matching the app's 12. */
   grid.innerHTML = '<div class="agent-skeleton"></div>'.repeat(12);
@@ -146,8 +243,6 @@ export async function initDemo() {
   /* Persisted timing and map overrides, standing in for the app's
      %APPDATA%\Astral\settings.json. */
   const config = loadConfig();
-
-  /* --- Filters --------------------------------------------------------- */
 
   filters.innerHTML = "";
   for (const name of ROLES) {
@@ -177,8 +272,6 @@ export async function initDemo() {
     query = "";
     render();
   });
-
-  /* --- Grid ------------------------------------------------------------ */
 
   function visible() {
     return agents.filter(
@@ -263,8 +356,6 @@ export async function initDemo() {
     next?.focus();
   });
 
-  /* --- Panel ----------------------------------------------------------- */
-
   function setPhase(phase, phaseLabel, loop, status) {
     root.dataset.phase = phase;
     panel.phase.textContent = phaseLabel;
@@ -279,6 +370,10 @@ export async function initDemo() {
       if (isTarget && run) card.dataset.flag = phase === "locked" ? "locked" : "target";
       else delete card.dataset.flag;
     }
+
+    if (phase === "locked") paintCard("instalock", `Locked ${selected?.name ?? ""}`.trim(), true);
+    else if (run) paintCard("instalock", `Monitoring · ${selected?.name ?? "—"}`, true);
+    else paintCard("instalock", "Idle", false);
   }
 
   function select(agent) {
@@ -316,8 +411,6 @@ export async function initDemo() {
       setPhase("idle", "Idle", "Standby", `${agent.name} ready. Start the loop to arm it.`);
     }
   }
-
-  /* --- Lock sequence --------------------------------------------------- */
 
   const wait = (ms, token) =>
     new Promise((resolve) => setTimeout(() => resolve(token === run), ms));
@@ -392,7 +485,256 @@ export async function initDemo() {
   });
   panel.stop?.addEventListener("click", stop);
 
-  /* --- Boot ------------------------------------------------------------ */
+  /* ================= 4. Rank tracker ================= */
+
+  const tracker = {
+    updated: document.getElementById("demo-tracker-updated"),
+    refresh: document.getElementById("demo-tracker-refresh"),
+    refreshLabel: document.getElementById("demo-tracker-refresh-label"),
+    reset: document.getElementById("demo-tracker-reset"),
+    card: document.getElementById("demo-rank-card"),
+    icon: document.getElementById("demo-rank-icon"),
+    fallback: document.getElementById("demo-rank-fallback"),
+    name: document.getElementById("demo-rank-name"),
+    rr: document.getElementById("demo-rank-rr"),
+    fill: document.getElementById("demo-rank-fill"),
+    wins: document.getElementById("demo-session-wins"),
+    losses: document.getElementById("demo-session-losses"),
+    net: document.getElementById("demo-session-rr"),
+    played: document.getElementById("demo-session-played"),
+    list: document.getElementById("demo-match-list"),
+    empty: document.getElementById("demo-match-empty"),
+  };
+
+  let trackerLoaded = false;
+  let trackerBusy = false;
+  /* How many of the recent matches count as "this session". Reset drops it to
+     zero, the way re-anchoring the session does in the app. */
+  let sessionSize = 3;
+
+  function paintSession() {
+    const inSession = DEMO_MATCHES.slice(0, sessionSize);
+    const wins = inSession.filter((m) => m.rr > 0).length;
+    const losses = inSession.filter((m) => m.rr < 0).length;
+    const net = inSession.reduce((sum, m) => sum + m.rr, 0);
+
+    tracker.wins.textContent = String(wins);
+    tracker.losses.textContent = String(losses);
+    tracker.played.textContent = String(inSession.length);
+    tracker.net.textContent = `${net > 0 ? "+" : ""}${net}`;
+    tracker.net.classList.toggle("rep-up", net > 0);
+    tracker.net.classList.toggle("rep-down", net < 0);
+
+    paintCard("tracker", `${DEMO_RANK.tierName} · ${net > 0 ? "+" : ""}${net} RR today`, net !== 0);
+  }
+
+  function paintMatches() {
+    const fragment = document.createDocumentFragment();
+
+    for (const match of DEMO_MATCHES) {
+      const row = document.createElement("div");
+      row.className = "rep-match-row";
+      row.dataset.result = match.rr > 0 ? "win" : match.rr < 0 ? "loss" : "draw";
+
+      const flag = document.createElement("span");
+      flag.className = "rep-match-flag";
+
+      const body = document.createElement("div");
+      const map = document.createElement("div");
+      map.className = "rep-match-map";
+      map.textContent = match.map;
+      const when = document.createElement("div");
+      when.className = "rep-match-when";
+      when.textContent = `${match.ago} min ago`;
+      body.append(map, when);
+
+      const rr = document.createElement("span");
+      rr.className = `rep-match-rr ${match.rr > 0 ? "rep-up" : "rep-down"}`;
+      rr.textContent = `${match.rr > 0 ? "+" : ""}${match.rr}`;
+
+      const tier = document.createElement("span");
+      tier.className = "rep-match-tier";
+      tier.textContent = match.tier;
+
+      row.append(flag, body, rr, tier);
+      fragment.append(row);
+    }
+
+    tracker.list.replaceChildren(fragment);
+    tracker.empty.hidden = true;
+  }
+
+  async function refreshTracker() {
+    if (trackerBusy) return;
+    trackerBusy = true;
+    tracker.refresh.disabled = true;
+    tracker.refreshLabel.textContent = "Loading…";
+
+    /* A beat of latency, so it reads the way it does against the real
+       POST /api/tracker/refresh rather than snapping. */
+    await new Promise((resolve) => setTimeout(resolve, 620));
+
+    tracker.card.hidden = false;
+    tracker.name.textContent = DEMO_RANK.tierName;
+    tracker.rr.textContent = `${DEMO_RANK.rr} RR`;
+    tracker.fill.style.width = `${Math.min(DEMO_RANK.rr, 100)}%`;
+    tracker.fallback.textContent = DEMO_RANK.tierName.slice(0, 2).toUpperCase();
+
+    const art = await loadTier(DEMO_RANK.tierName);
+    if (art?.color) tracker.card.style.setProperty("--rank-color", art.color);
+    if (art?.icon) {
+      tracker.icon.addEventListener("load", () => {
+        tracker.icon.hidden = false;
+        tracker.fallback.hidden = true;
+      }, { once: true });
+      tracker.icon.src = art.icon;
+    }
+
+    paintMatches();
+    paintSession();
+    tracker.updated.textContent = `Updated ${clock()}`;
+
+    trackerLoaded = true;
+    trackerBusy = false;
+    tracker.refresh.disabled = false;
+    tracker.refreshLabel.textContent = "Refresh";
+  }
+
+  tracker.refresh.addEventListener("click", () => refreshTracker());
+  tracker.reset.addEventListener("click", () => {
+    sessionSize = 0;
+    paintSession();
+    tracker.updated.textContent = `Session reset ${clock()}`;
+  });
+
+  /* ================= 5. Auto-queue ================= */
+
+  const queue = {
+    status: document.getElementById("demo-queue-status"),
+    start: document.getElementById("demo-queue-start"),
+    startLabel: document.getElementById("demo-queue-start-label"),
+    stop: document.getElementById("demo-queue-stop"),
+    picker: document.getElementById("demo-queue-picker"),
+    party: document.getElementById("demo-party-state"),
+    partyQueue: document.getElementById("demo-party-queue"),
+    requeue: document.getElementById("demo-opt-requeue"),
+    ready: document.getElementById("demo-opt-ready"),
+  };
+
+  let queueId = "competitive";
+  let queueRun = 0;
+  let requeues = 0;
+
+  const chips = new Map();
+  for (const item of QUEUES) {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "rep-queue-chip";
+    chip.textContent = item.name;
+    chip.addEventListener("click", () => {
+      queueId = item.id;
+      paintQueueChips();
+    });
+    chips.set(item.id, chip);
+    queue.picker.append(chip);
+  }
+
+  function paintQueueChips() {
+    for (const [id, chip] of chips) {
+      const active = id === queueId;
+      chip.classList.toggle("is-active", active);
+      chip.setAttribute("aria-pressed", String(active));
+    }
+    queue.partyQueue.textContent = `· queue: ${queueId}`;
+  }
+
+  const delayPair = bindPair("demo-opt-delay", "demo-opt-delay-value", 0, 60000);
+  const maxPair = bindPair("demo-opt-max", "demo-opt-max-value", 1, 20);
+
+  function bindPair(rangeId, numberId, min, max) {
+    const range = document.getElementById(rangeId);
+    const field = document.getElementById(numberId);
+    const clamp = (v) => Math.min(Math.max(Number(v) || min, min), max);
+
+    range.addEventListener("input", () => (field.value = range.value));
+    field.addEventListener("change", () => {
+      field.value = String(clamp(field.value));
+      range.value = field.value;
+    });
+
+    return { value: () => clamp(range.value) };
+  }
+
+  function setQueueStatus(text, running) {
+    queue.status.textContent = text;
+    paintCard("autoqueue", running ? `Running · ${queueId}` : "Idle", running);
+  }
+
+  /* Its own token check: `wait` above is bound to the instalock run counter,
+     and reusing it here would let a stopped queue loop keep going. */
+  const queueWait = (ms, token) =>
+    new Promise((resolve) => setTimeout(() => resolve(token === queueRun), ms));
+
+  async function runQueue() {
+    const token = ++queueRun;
+    requeues = 0;
+    queue.start.disabled = true;
+    queue.stop.disabled = false;
+    queue.startLabel.textContent = "Running";
+
+    setQueueStatus("Watching for the end of a match.", true);
+    queue.party.textContent = "Party: MATCHMAKING";
+
+    while (token === queueRun) {
+      if (!(await queueWait(2400, token))) return;
+
+      /* The real loop only requeues while the client is back in the menus. */
+      queue.party.textContent = "Party: DEFAULT";
+      const limit = maxPair.value();
+
+      if (requeues >= limit) {
+        setQueueStatus(`Stopped requeueing after ${limit} in a row. Start again when you're ready.`, true);
+        return;
+      }
+
+      if (!queue.requeue.checked) {
+        setQueueStatus("Match over. Auto-requeue is off, so nothing to do.", true);
+        if (!(await queueWait(2200, token))) return;
+        continue;
+      }
+
+      const delay = delayPair.value();
+      setQueueStatus(`Match over. Requeueing in ${delay} ms…`, true);
+      if (!(await queueWait(Math.min(delay, 2500), token))) return;
+
+      requeues += 1;
+      queue.party.textContent = "Party: MATCHMAKING";
+      setQueueStatus(`Requeued automatically (${requeues} of ${limit}).`, true);
+      if (!(await queueWait(1800, token))) return;
+
+      if (queue.ready.checked) {
+        setQueueStatus("Readied up.", true);
+        if (!(await queueWait(1200, token))) return;
+      }
+    }
+  }
+
+  function stopQueue() {
+    queueRun = 0;
+    queue.start.disabled = false;
+    queue.stop.disabled = true;
+    queue.startLabel.textContent = "Start";
+    queue.party.textContent = "Party: DEFAULT";
+    setQueueStatus("Stopped by user.", false);
+  }
+
+  queue.start.addEventListener("click", () => {
+    if (!queueRun) runQueue();
+  });
+  queue.stop.addEventListener("click", stopQueue);
+  paintQueueChips();
+
+  /* ================= Boot ================= */
 
   ({ agents, live } = await loadAgents());
   render();
@@ -419,4 +761,5 @@ export async function initDemo() {
   });
 
   setPhase("idle", "Idle", "Standby", "Pick an agent to arm the loop.");
+  setView("home");
 }
