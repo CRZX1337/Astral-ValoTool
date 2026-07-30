@@ -5,7 +5,7 @@
  */
 
 import { fetchState } from "./api.js";
-import { applyLockState, phase, setConnected } from "./store.js";
+import { applyLockState, applyModuleState, phase, setConnected } from "./store.js";
 
 const INTERVALS = {
   booting: 600,
@@ -52,7 +52,10 @@ async function hydrate() {
 }
 
 function openStream() {
-  stream = new EventSource("/api/state/stream");
+  // The multiplexed stream: every tool, each frame tagged with its module id.
+  // /api/state/stream still exists and still carries a bare LockState, but it
+  // is there for external scripts rather than for us.
+  stream = new EventSource("/api/events");
 
   stream.addEventListener("open", () => {
     failures = 0;
@@ -69,7 +72,10 @@ function openStream() {
     }
 
     failures = 0;
-    applyLockState(next);
+
+    if (next && typeof next.module === "string") {
+      applyModuleState(next.module, next.state);
+    }
   });
 
   stream.addEventListener("error", () => {

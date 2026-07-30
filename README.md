@@ -12,9 +12,19 @@ Lock your Valorant agent before anyone else in the lobby finishes loading.
 
 ## 🎉 What it does
 
-Picking an agent in pre-game usually comes down to whose client loaded first and who moved their mouse fastest. Astral listens to Valorant's local client API instead, and hovers and locks your agent the second pre-game opens.
+A toolkit for your own Valorant client. Everything runs against the local client API — no credentials, no account login, nothing but the tokens the game already holds.
 
 It's one C# app: an embedded ASP.NET Core Web API behind a native WebView2 window. Use the dark-mode desktop UI, or skip it entirely and talk to the local REST endpoints from your own scripts.
+
+---
+
+## 🧰 The tools
+
+| Tool | What it does |
+|---|---|
+| **Instalock** | Detects pre-game and locks your agent, with per-map overrides and adjustable timing |
+| **Rank tracker** | Current rank and RR, session wins/losses and net RR, and per-match RR deltas |
+| **Auto-queue** | Requeues after a match, confirms the party ready check, and picks the queue |
 
 ---
 
@@ -23,9 +33,11 @@ It's one C# app: an embedded ASP.NET Core Web API behind a native WebView2 windo
 - ⚡ Detects the pre-game lobby and locks your agent through `RadiantConnect`.
 - 🗺️ Per-map overrides, so you can have Sova on Ascent, Viper on Breeze, Omen on Lotus, and your main everywhere else.
 - ⏱️ Hover, lock, and post-lock delays in milliseconds if you want the pick to look less instant.
-- 📡 Server-Sent Events on `/api/state/stream`, so the UI and any external client stay current without polling.
-- 🔔 Closing the window sends Astral to the system tray. The lock loop keeps running.
-- 🖼️ Agent portraits and role icons are fetched from `valorant-api.com` at runtime.
+- 📊 Rank and session tracking that refreshes on demand rather than polling Riot on a timer.
+- 🔁 Auto-queue with real guard rails: it will not queue during a match, and it stops itself after a configurable number of requeues in a row.
+- 📡 Server-Sent Events on `/api/events`, one stream carrying every tool's state.
+- 🔔 Closing the window sends Astral to the system tray. Running loops keep going.
+- 🖼️ Agent portraits, role icons and rank badges are fetched from `valorant-api.com` at runtime.
 - 📦 The whole web frontend is embedded in the binary.
 
 ---
@@ -104,16 +116,28 @@ It's one C# app: an embedded ASP.NET Core Web API behind a native WebView2 windo
 On startup, Astral binds Kestrel to a random loopback port. It's `127.0.0.1` only, so nothing on your
 network can reach it. From there you can drive or watch the lock loop yourself:
 
+The three state-changing routes reject requests carrying an `Origin` header from another site, so a
+web page you happen to have open can't drive your lock loop. Scripts don't send that header, so
+`curl`, PowerShell and the examples below are unaffected.
+
 | Route | Purpose |
 |---|---|
 | `GET /api/agents` | Agent list from the local RadiantConnect enum |
 | `GET /api/agent-assets` | The same list enriched with portraits, roles and colours |
 | `GET /api/state` | Current lock state |
 | `GET /api/state/stream` | The same state pushed on every change (SSE) |
+| `GET /api/events` | Every tool's state pushed on every change, tagged by module (SSE) |
 | `POST /api/lock` | Start monitoring, or re-aim a running loop at another agent |
 | `POST /api/stop` | Stop monitoring |
 | `GET /api/options` | Settings plus the list of maps they can refer to |
 | `PATCH /api/options` | Partial settings update, validated and persisted |
+| `GET /api/tracker` | Rank, session totals and recent competitive matches |
+| `POST /api/tracker/refresh` | Re-read rank and match history from Riot |
+| `POST /api/tracker/session/reset` | Re-anchor the session to now |
+| `GET /api/autoqueue` | Auto-queue state, party state and eligible queues |
+| `POST /api/autoqueue/start` · `/stop` | Run or stop the automation loop |
+| `POST /api/autoqueue/queueing` | Enter or leave the queue right now |
+| `GET`/`PATCH /api/autoqueue/options` | Auto-queue settings and the queue list |
 
 #### Start, or switch target agent
 ```http
@@ -182,12 +206,9 @@ Whenever you change something in the UI or through the API, it's saved to
 ```json
 {
   "Instalocker": {
-    "HoverDelayMs": 0,
-    "LockDelayMs": 0,
     "PostLockDelayMs": 5000,
-    "MapAgentOverrides": {
-      "Ascent": "Sova"
-    }
+    "HoverDelayMs": 0,
+    "LockDelayMs": 0
   }
 }
 ```
@@ -197,7 +218,21 @@ Whenever you change something in the UI or through the API, it's saved to
 | `HoverDelayMs` | integer | Wait before hovering/selecting the agent in pre-game. 0 to 10000 ms. |
 | `LockDelayMs` | integer | Extra wait between hovering and clicking Lock. 0 to 10000 ms. |
 | `PostLockDelayMs` | integer | Idle time after locking, before the state resets. 0 to 10000 ms. |
-| `MapAgentOverrides` | object | Maps exact map names (`"Ascent"`, `"Breeze"`) to canonical agent names. |
+| `MapAgentOverrides` | object | Maps exact map names (`"Ascent"`, `"Breeze"`) to canonical agent names. Empty unless you add rules. |
+
+`MapAgentOverrides` isn't in the shipped file. Add it yourself, or let the UI
+write it to `%APPDATA%\Astral\settings.json`:
+
+```json
+{
+  "Instalocker": {
+    "MapAgentOverrides": {
+      "Ascent": "Sova",
+      "Breeze": "Viper"
+    }
+  }
+}
+```
 
 ---
 

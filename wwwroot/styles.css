@@ -180,11 +180,13 @@ dd {
 
 /* 3. Shell + topbar ===================================================== */
 
+/* Topbar over one switchable viewport. The two-column split the instalocker
+   used to own now belongs to its own view (see css/shell.css), because the
+   other tools want the full width. */
 .app {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--panel-w);
   grid-template-rows: auto minmax(0, 1fr);
   gap: 12px;
   height: 100dvh;
@@ -192,7 +194,6 @@ dd {
 }
 
 .topbar {
-  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1312,9 +1313,9 @@ dd {
 
 /* Below the desktop window's minimum width the panel docks to the bottom. */
 @media (max-width: 900px) {
-  .app {
+  .view-instalock {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-rows: minmax(0, 1fr) auto;
   }
 
   .panel {

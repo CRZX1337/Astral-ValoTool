@@ -12,6 +12,14 @@
     <ApplicationIcon>images\app.ico</ApplicationIcon>
   </PropertyGroup>
 
+  <!-- Which native WebView2 loader to ship. Follows the publish RID so an
+       arm64 build cannot silently walk away with the x64 loader; a plain
+       `dotnet build` sets no RID, and win-x64 is the one we release. -->
+  <PropertyGroup>
+    <WebView2LoaderRid Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)</WebView2LoaderRid>
+    <WebView2LoaderRid Condition="'$(WebView2LoaderRid)' == ''">win-x64</WebView2LoaderRid>
+  </PropertyGroup>
+
   <!-- Identity baked into the Win32 version resource: this is what the file's
        Properties dialog, Task Manager and SmartScreen prompts show, so a
        downloaded release does not look anonymous. -->
@@ -64,7 +72,7 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <ExcludeFromSingleFile>false</ExcludeFromSingleFile>
     </Content>
-    <Content Include="$(PkgMicrosoft_Web_WebView2)\runtimes\win-x64\native\WebView2Loader.dll">
+    <Content Include="$(PkgMicrosoft_Web_WebView2)\runtimes\$(WebView2LoaderRid)\native\WebView2Loader.dll">
       <Link>WebView2Loader.dll</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <ExcludeFromSingleFile>false</ExcludeFromSingleFile>

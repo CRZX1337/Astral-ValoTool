@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using System.Threading.Channels;
 using RadiantConnect;
 using RadiantConnect.Methods;
@@ -7,15 +6,8 @@ using Astral.Models;
 
 namespace Astral.Services;
 
-public sealed class InstalockerService
+public sealed class InstalockerService : IModuleStateSource
 {
-    private static readonly string[] ValorantProcesses =
-    [
-        "VALORANT",
-        "VALORANT-Win64-Shipping",
-        "VALORANT-Win32-Shipping"
-    ];
-
     private static readonly IReadOnlyDictionary<string, ValorantTables.Agent> AgentLookup = BuildAgentLookup();
     private static readonly IReadOnlyList<AgentOption> Agents = BuildAgents();
     private static readonly IReadOnlyList<string> MapNames = BuildMapNames();
@@ -25,8 +17,8 @@ public sealed class InstalockerService
     private const string UnknownMapName = "the current map";
 
     private readonly OptionsStore _optionsStore;
+    private readonly ValorantConnection _connection;
     private readonly object _sync = new();
-    private readonly HashSet<string> _seenMatches = [];
 
     private CancellationTokenSource? _runCts;
     private Channel<bool>? _signalQueue;
@@ -34,9 +26,34 @@ public sealed class InstalockerService
     private ValorantTables.Agent? _selectedAgent;
     private LockState _state = NewState(false, false, null, "Waiting...", null);
 
-    public InstalockerService(OptionsStore optionsStore)
+    /// <summary>
+    /// Identifies the current run. Bumped when a worker is started and when one
+    /// is stopped, and carried by the worker for its whole life.
+    ///
+    /// Stopping cannot make a worker vanish -- it is somewhere inside an await
+    /// on the game client -- so a stopped worker stays alive long enough to
+    /// publish at least once more. Every publish is checked against this, which
+    /// is what keeps a dying run from overwriting the state of the one that
+    /// replaced it, or from resurrecting "monitoring" after Stop.
+    /// </summary>
+    private int _generation;
+
+    public InstalockerService(OptionsStore optionsStore, ValorantConnection connection)
     {
         _optionsStore = optionsStore;
+        _connection = connection;
+    }
+
+    public string ModuleId => "instalock";
+
+    public object GetModuleState() => GetState();
+
+    public IDisposable Subscribe(Action<object> onChanged)
+    {
+        void Handler(LockState state) => onChanged(state);
+
+        StateChanged += Handler;
+        return ModuleSubscription.Create(() => StateChanged -= Handler);
     }
 
     /// <summary>
@@ -93,19 +110,26 @@ public sealed class InstalockerService
 
             if (_worker is { IsCompleted: false })
             {
+                // Re-aiming a live run: same worker, same generation.
                 signalQueue = _signalQueue;
             }
             else
             {
-                _seenMatches.Clear();
-                _runCts = new CancellationTokenSource();
-                _signalQueue = Channel.CreateUnbounded<bool>(new UnboundedChannelOptions
+                // Held in locals and captured by value. Reading the fields from
+                // inside the lambda would race a Stop that replaces them before
+                // the scheduled task ever gets to run.
+                CancellationTokenSource cts = new();
+                Channel<bool> queue = Channel.CreateUnbounded<bool>(new UnboundedChannelOptions
                 {
                     SingleReader = true,
                     SingleWriter = false
                 });
-                signalQueue = _signalQueue;
-                _worker = Task.Run(() => RunAsync(_runCts.Token, _signalQueue));
+
+                int generation = ++_generation;
+                _runCts = cts;
+                _signalQueue = queue;
+                signalQueue = queue;
+                _worker = Task.Run(() => RunAsync(generation, cts.Token, queue));
             }
         }
 
@@ -123,6 +147,10 @@ public sealed class InstalockerService
 
         lock (_sync)
         {
+            // Retires the running generation: anything the outgoing worker still
+            // publishes on its way out is now stale and gets dropped.
+            _generation++;
+
             cts = _runCts;
             signalQueue = _signalQueue;
             selectedAgent = _selectedAgent is { } agent ? ToDisplayName(agent) : null;
@@ -138,18 +166,19 @@ public sealed class InstalockerService
         Publish(published);
     }
 
-    private async Task RunAsync(CancellationToken cancellationToken, Channel<bool> signalQueue)
+    private async Task RunAsync(int generation, CancellationToken cancellationToken, Channel<bool> signalQueue)
     {
-        if (!IsValorantRunning())
-        {
-            Fail("Valorant is not running. Start the game, then try again.");
-            return;
-        }
+        // Owned by this worker alone, so it needs no synchronisation and a
+        // restart cannot clear it out from under a run that is still draining.
+        HashSet<string> seenMatches = [];
 
         try
         {
-            using Initiator initiator = new();
-            UpdateStatus("Connected to Valorant. Waiting for pre-game.");
+            // Shared with every other tool; the connection closes when the last
+            // lease goes back, not when this worker happens to finish.
+            using ValorantLease lease = await _connection.AcquireAsync(cancellationToken).ConfigureAwait(false);
+            Initiator initiator = lease.Initiator;
+            UpdateStatus(generation, "Connected to Valorant. Waiting for pre-game.");
 
             void HandlePreGameSignal(string _) => signalQueue.Writer.TryWrite(true);
             void HandleGameStateChanged(string _) => signalQueue.Writer.TryWrite(true);
@@ -168,7 +197,8 @@ public sealed class InstalockerService
                     {
                     }
 
-                    await ProcessPreGameAsync(initiator, cancellationToken).ConfigureAwait(false);
+                    await ProcessPreGameAsync(generation, initiator, seenMatches, cancellationToken)
+                        .ConfigureAwait(false);
                 }
             }
             finally
@@ -181,43 +211,60 @@ public sealed class InstalockerService
         catch (OperationCanceledException)
         {
         }
+        catch (ValorantUnavailableException ex)
+        {
+            // Already worded for a user by the connection.
+            Fail(generation, ex.Message);
+        }
         catch (Exception ex)
         {
-            Fail($"Could not attach to Valorant: {ex.Message}");
+            // The shared connection is suspect once an endpoint blows up on it;
+            // drop it so the next tool to start gets a fresh one.
+            _connection.Invalidate();
+            Fail(generation, $"Could not attach to Valorant: {ex.Message}");
         }
     }
 
-    private async Task ProcessPreGameAsync(Initiator initiator, CancellationToken cancellationToken)
+    private async Task ProcessPreGameAsync(
+        int generation,
+        Initiator initiator,
+        HashSet<string> seenMatches,
+        CancellationToken cancellationToken)
     {
         var match = await initiator.Endpoints.PreGameEndpoints.FetchPreGameMatchAsync().ConfigureAwait(false);
 
         if (match is null)
         {
-            UpdateStatus("Waiting for pre-game.");
+            UpdateStatus(generation, "Waiting for pre-game.");
             return;
         }
 
         // The map decides which agent is used, so it has to be resolved first --
         // otherwise every status line would name the grid selection while a
         // different agent is actually locked.
-        InstalockerOptions options = _optionsStore.Current;
+        InstalockerOptions options = _optionsStore.Current.Instalocker;
         string mapName = ResolveMapName(match.MapId);
         ValorantTables.Agent agent = ResolveAgentForMap(mapName, options);
         string agentName = ToDisplayName(agent);
 
-        if (_seenMatches.Contains(match.Id))
+        if (seenMatches.Contains(match.Id))
         {
-            UpdateStatus($"Locked {agentName}. Monitoring for the next match.");
+            UpdateStatus(generation, $"Locked {agentName}. Monitoring for the next match.");
             return;
         }
 
-        UpdateStatus($"Selecting {agentName} on {mapName}.");
+        UpdateStatus(generation, $"Selecting {agentName} on {mapName}.");
 
         if (options.HoverDelayMs > 0)
         {
             await Task.Delay(options.HoverDelayMs, cancellationToken).ConfigureAwait(false);
         }
 
+        // Stop has to mean stop: neither client call takes a token, and with the
+        // default delays of 0 there is no awaited gap between them to cancel at.
+        // Checking on each boundary is what keeps an agent from being taken
+        // after the user has already asked to stop.
+        cancellationToken.ThrowIfCancellationRequested();
         await initiator.Endpoints.PreGameEndpoints.SelectCharacterAsync(agent).ConfigureAwait(false);
 
         if (options.LockDelayMs > 0)
@@ -225,16 +272,17 @@ public sealed class InstalockerService
             await Task.Delay(options.LockDelayMs, cancellationToken).ConfigureAwait(false);
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
         await initiator.Endpoints.PreGameEndpoints.LockCharacterAsync(agent).ConfigureAwait(false);
-        _seenMatches.Add(match.Id);
-        MarkLocked(agentName, mapName);
+        seenMatches.Add(match.Id);
+        MarkLocked(generation, agentName, mapName);
 
         if (options.PostLockDelayMs > 0)
         {
             await Task.Delay(options.PostLockDelayMs, cancellationToken).ConfigureAwait(false);
         }
 
-        UpdateStatus($"Locked {agentName}. Monitoring for the next match.");
+        UpdateStatus(generation, $"Locked {agentName}. Monitoring for the next match.");
     }
 
     /// <summary>
@@ -253,12 +301,17 @@ public sealed class InstalockerService
         return GetSelectedAgent();
     }
 
-    private void UpdateStatus(string status)
+    private void UpdateStatus(int generation, string status)
     {
         LockState published;
 
         lock (_sync)
         {
+            if (_generation != generation)
+            {
+                return;
+            }
+
             string? selectedAgent = _selectedAgent is { } agent ? ToDisplayName(agent) : null;
             published = _state = NewState(true, false, selectedAgent, status, null);
         }
@@ -266,29 +319,43 @@ public sealed class InstalockerService
         Publish(published);
     }
 
-    private void MarkLocked(string agentName, string mapName)
+    private void MarkLocked(int generation, string agentName, string mapName)
     {
         LockState published;
 
         lock (_sync)
         {
+            if (_generation != generation)
+            {
+                return;
+            }
+
             published = _state = NewState(true, true, agentName, $"{agentName} selected and locked on {mapName}.", null);
         }
 
         Publish(published);
     }
 
-    private void Fail(string error)
+    /// <summary>
+    /// The generation check guards the teardown as much as the status: a worker
+    /// failing on its way out must not null the fields of the run that has
+    /// already replaced it.
+    /// </summary>
+    private void Fail(int generation, string error)
     {
         LockState published;
 
         lock (_sync)
         {
+            if (_generation != generation)
+            {
+                return;
+            }
+
             _runCts?.Dispose();
             _runCts = null;
             _signalQueue = null;
             _worker = null;
-            _seenMatches.Clear();
             string? selectedAgent = _selectedAgent is { } agent ? ToDisplayName(agent) : null;
             published = _state = NewState(false, false, selectedAgent, "Idle.", error);
         }
@@ -330,11 +397,6 @@ public sealed class InstalockerService
         }
     }
 
-    private static bool IsValorantRunning()
-    {
-        return ValorantProcesses.Any(name => Process.GetProcessesByName(name).Length > 0);
-    }
-
     private static bool TryResolveAgent(string input, out ValorantTables.Agent agent)
     {
         return AgentLookup.TryGetValue(Normalize(input), out agent);
@@ -350,7 +412,7 @@ public sealed class InstalockerService
     /// override. Try the value as sent, then its last path segment, against a
     /// case-insensitive copy of the table.
     /// </summary>
-    private static string ResolveMapName(string? mapId)
+    public static string ResolveMapName(string? mapId)
     {
         if (string.IsNullOrWhiteSpace(mapId))
         {

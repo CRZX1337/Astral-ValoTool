@@ -31,6 +31,59 @@ export function requestStop() {
   return request("/api/stop", { method: "POST" });
 }
 
+// --- rank tracker -------------------------------------------------------
+
+export function fetchTracker() {
+  return request("/api/tracker");
+}
+
+export function refreshTracker() {
+  return request("/api/tracker/refresh", { method: "POST" });
+}
+
+export function resetTrackerSession() {
+  return request("/api/tracker/session/reset", { method: "POST" });
+}
+
+// --- auto-queue ---------------------------------------------------------
+
+export function fetchAutoQueue() {
+  return request("/api/autoqueue");
+}
+
+export function startAutoQueue() {
+  return request("/api/autoqueue/start", { method: "POST" });
+}
+
+export function stopAutoQueue() {
+  return request("/api/autoqueue/stop", { method: "POST" });
+}
+
+export function refreshAutoQueue() {
+  return request("/api/autoqueue/refresh", { method: "POST" });
+}
+
+/** Enters or leaves the queue immediately, independent of the automation. */
+export function setQueueing(queueing) {
+  return request("/api/autoqueue/queueing", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ queueing })
+  });
+}
+
+export function fetchAutoQueueOptions() {
+  return request("/api/autoqueue/options");
+}
+
+export function patchAutoQueueOptions(patch) {
+  return request("/api/autoqueue/options", {
+    method: "PATCH",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(patch)
+  });
+}
+
 /** Settings plus the map list they can refer to, in one round trip. */
 export function fetchOptions() {
   return request("/api/options");

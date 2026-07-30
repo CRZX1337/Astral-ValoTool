@@ -330,6 +330,10 @@ export async function initDemo() {
     if (!configured.length) return ROTATION[cycle++ % ROTATION.length];
 
     const others = ROTATION.filter((map) => !configured.includes(map));
+    /* Every map in the rotation is overridden, so there is nothing to alternate
+       with -- walk the rules alone rather than interleaving `undefined`. */
+    if (!others.length) return configured[cycle++ % configured.length];
+
     const pool = configured.flatMap((map, i) => [map, others[i % others.length]]);
     return pool[cycle++ % pool.length];
   }

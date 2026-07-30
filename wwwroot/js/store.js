@@ -5,8 +5,28 @@
  * Flow: api -> store -> emit -> views.
  */
 
-import { ApiError, fetchAgents, fetchOptions, patchOptions, requestLock, requestStop } from "./api.js";
+import {
+  ApiError,
+  fetchAgents,
+  fetchAutoQueue,
+  fetchAutoQueueOptions,
+  fetchOptions,
+  fetchTracker,
+  patchAutoQueueOptions,
+  patchOptions,
+  refreshAutoQueue,
+  refreshTracker,
+  requestLock,
+  requestStop,
+  resetTrackerSession,
+  setQueueing,
+  startAutoQueue,
+  stopAutoQueue
+} from "./api.js";
 import { sortRoles } from "./roles.js";
+
+/** Views the shell can show. `home` is the launcher; the rest are tools. */
+export const VIEWS = ["home", "instalock", "tracker", "autoqueue"];
 
 /** How long the save button keeps saying "Saved" before returning to idle. */
 const SAVED_NOTICE_MS = 2200;
@@ -21,6 +41,9 @@ const ARMING_STATUS = "Waiting for pre-game.";
 const listeners = new Set();
 
 const state = {
+  // Which tool is on screen. The app opens on the launcher.
+  view: "home",
+
   agents: [],
   assetsAvailable: true,
   loaded: false,
@@ -42,7 +65,17 @@ const state = {
   options: null,
   optionsDraft: null,
   optionsStatus: "idle", // idle | loading | saving | saved | error
-  optionsError: null
+  optionsError: null,
+
+  // --- rank tracker ---
+  tracker: null,
+  trackerPending: false,
+
+  // --- auto-queue ---
+  autoqueue: null,
+  queueOptions: null,
+  queuePending: false,
+  queueSaveNote: ""
 };
 
 let savedNoticeTimer = null;
@@ -144,6 +177,195 @@ export function mapsForRow(index) {
   );
 
   return maps.filter((map) => !taken.has(map));
+}
+
+// --- routing -----------------------------------------------------------
+
+/**
+ * Switches view and lazily loads whatever that tool needs. Loading here rather
+ * than in each view keeps the views pure renderers.
+ */
+export function setView(view) {
+  if (!VIEWS.includes(view) || state.view === view) {
+    return;
+  }
+
+  state.view = view;
+  state.actionError = null;
+  emit();
+
+  if (view === "tracker" && !state.tracker?.updatedAt && !state.trackerPending) {
+    void refreshTrackerState();
+  }
+
+  if (view === "autoqueue") {
+    if (!state.queueOptions) {
+      void loadQueueOptions();
+    }
+
+    if (!state.queuePending) {
+      void refreshQueueState();
+    }
+  }
+}
+
+export function goHome() {
+  setView("home");
+}
+
+/**
+ * A frame off /api/events. Every tool publishes its whole state, so this is a
+ * straight assignment rather than a merge.
+ */
+export function applyModuleState(module, moduleState) {
+  switch (module) {
+    case "instalock":
+      applyLockState(moduleState);
+      return;
+    case "tracker":
+      state.tracker = moduleState;
+      break;
+    case "autoqueue":
+      state.autoqueue = moduleState;
+      break;
+    default:
+      return;
+  }
+
+  state.connected = true;
+  emit();
+}
+
+// --- tracker -----------------------------------------------------------
+
+export async function refreshTrackerState() {
+  if (state.trackerPending) {
+    return;
+  }
+
+  state.trackerPending = true;
+  emit();
+
+  try {
+    state.tracker = await refreshTracker();
+  } catch (error) {
+    state.tracker = {
+      ...(state.tracker ?? {}),
+      error: error instanceof ApiError ? error.message : "Could not load your rank."
+    };
+  } finally {
+    state.trackerPending = false;
+    emit();
+  }
+}
+
+export async function resetSession() {
+  try {
+    state.tracker = await resetTrackerSession();
+  } catch {
+    // The stream will correct us if this landed anyway.
+  } finally {
+    emit();
+  }
+}
+
+export async function loadTracker() {
+  try {
+    state.tracker = await fetchTracker();
+  } catch {
+    // Nothing loaded yet is a valid starting state.
+  } finally {
+    emit();
+  }
+}
+
+// --- auto-queue --------------------------------------------------------
+
+export async function loadQueueOptions() {
+  try {
+    state.queueOptions = await fetchAutoQueueOptions();
+  } catch (error) {
+    state.queueSaveNote = error instanceof ApiError ? error.message : "Could not load auto-queue settings.";
+  } finally {
+    emit();
+  }
+}
+
+export async function refreshQueueState() {
+  if (state.queuePending) {
+    return;
+  }
+
+  state.queuePending = true;
+  emit();
+
+  try {
+    state.autoqueue = await refreshAutoQueue();
+  } catch {
+    // Errors surface through the module state itself.
+  } finally {
+    state.queuePending = false;
+    emit();
+  }
+}
+
+export async function loadQueue() {
+  try {
+    state.autoqueue = await fetchAutoQueue();
+  } catch {
+    // Idle is a fine starting state.
+  } finally {
+    emit();
+  }
+}
+
+export async function toggleAutoQueue(start) {
+  state.queuePending = true;
+  emit();
+
+  try {
+    state.autoqueue = start ? await startAutoQueue() : await stopAutoQueue();
+  } catch (error) {
+    state.queueSaveNote = error instanceof ApiError ? error.message : "Could not change auto-queue.";
+  } finally {
+    state.queuePending = false;
+    emit();
+  }
+}
+
+export async function queueNow(queueing) {
+  state.queuePending = true;
+  emit();
+
+  try {
+    state.autoqueue = await setQueueing(queueing);
+  } catch (error) {
+    state.queueSaveNote = error instanceof ApiError ? error.message : "Could not change the queue.";
+  } finally {
+    state.queuePending = false;
+    emit();
+  }
+}
+
+/** Auto-queue settings save on change -- there is no draft to reconcile. */
+export async function saveQueueOptions(patch) {
+  if (!state.queueOptions) {
+    return;
+  }
+
+  state.queueOptions = { ...state.queueOptions, ...patch };
+  state.queueSaveNote = "Saving…";
+  emit();
+
+  try {
+    state.queueOptions = await patchAutoQueueOptions(patch);
+    state.queueSaveNote = "Saved";
+  } catch (error) {
+    state.queueSaveNote = error instanceof ApiError ? error.message : "Could not save.";
+    void loadQueueOptions();
+  } finally {
+    emit();
+  }
 }
 
 // --- actions -----------------------------------------------------------

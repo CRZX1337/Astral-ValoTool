@@ -1,0 +1,502 @@
+/* ==========================================================================
+   Shell, home menu and the tool views
+     1. Viewport + view transitions   4. Tracker
+     2. Home menu                     5. Auto-queue
+     3. Shared tool chrome
+   ========================================================================== */
+
+/* 1. Viewport ============================================================ */
+
+.viewport {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
+.view {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  animation: view-in 320ms var(--ease-out) both;
+}
+
+/* The instalocker keeps the two-column split the shell used to own. */
+.view-instalock {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--panel-w);
+  gap: 12px;
+}
+
+.view-tool {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+@keyframes view-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Back button in the topbar, only present away from home. */
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px 6px 9px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 200ms var(--ease), color 200ms var(--ease), background 200ms var(--ease);
+}
+
+.back-btn:hover {
+  border-color: var(--hairline-strong);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+
+.back-btn svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+/* 2. Home menu =========================================================== */
+
+.home {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.home-head {
+  padding: 2px 2px 0;
+}
+
+.home-title {
+  font-size: clamp(1.35rem, 3vw, 1.8rem);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+}
+
+.home-sub {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 0.86rem;
+}
+
+.tool-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(232px, 1fr));
+  gap: 12px;
+  padding-bottom: 4px;
+}
+
+.tool-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 168px;
+  padding: 16px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  overflow: hidden;
+
+  /* Staggered entry; --i is set per card in the markup. */
+  animation: card-in 460ms var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 65ms);
+}
+
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+
+.tool-card:hover,
+.tool-card:focus-visible {
+  border-color: color-mix(in srgb, var(--accent, #5bb5ff) 40%, transparent);
+}
+
+/* Everything inside has to clear the .lit and .glass-rim pseudo-elements. */
+.tool-card > * {
+  position: relative;
+  z-index: 2;
+}
+
+.tool-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  border: 1px solid color-mix(in srgb, var(--accent, #5bb5ff) 28%, transparent);
+  background: color-mix(in srgb, var(--accent, #5bb5ff) 14%, transparent);
+  color: var(--accent, #5bb5ff);
+}
+
+.tool-icon svg {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tool-name {
+  font-size: 1.02rem;
+  font-weight: 660;
+  letter-spacing: -0.02em;
+}
+
+.tool-desc {
+  color: var(--text-muted);
+  font-size: 0.81rem;
+  line-height: 1.4;
+}
+
+/* Live status, fed by the same event stream the tools publish on. */
+.tool-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--hairline);
+  color: var(--text-dim);
+  font-size: 0.76rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.tool-status[data-live="on"] {
+  color: var(--accent, #5bb5ff);
+}
+
+.tool-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.tool-status[data-live="on"] .tool-dot {
+  animation: pulse-ring 2.2s var(--ease) infinite;
+}
+
+/* 3. Shared tool chrome ================================================== */
+
+.tool-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+}
+
+.tool-head-title {
+  font-size: 1.05rem;
+  font-weight: 680;
+  letter-spacing: -0.025em;
+}
+
+.tool-head-sub {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.tool-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.tool-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--radius);
+}
+
+.tool-empty {
+  padding: 26px 16px;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.tool-alert {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--bad-soft);
+  border: 1px solid rgba(255, 90, 104, 0.28);
+  color: #ff929b;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.tool-note {
+  color: var(--text-dim);
+  font-size: 0.78rem;
+}
+
+/* 4. Tracker ============================================================= */
+
+.rank-hero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.rank-badge {
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 84px;
+  flex: none;
+  border-radius: 20px;
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.rank-badge img {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+}
+
+.rank-meta {
+  min-width: 0;
+}
+
+.rank-name {
+  font-size: clamp(1.2rem, 2.6vw, 1.6rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.rank-rr {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.rr-bar {
+  position: relative;
+  height: 6px;
+  margin-top: 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+
+.rr-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--rank-color, #5bb5ff) 70%, white 10%),
+    var(--rank-color, #5bb5ff));
+  transition: width 620ms var(--ease-out);
+}
+
+.session-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
+  gap: 8px;
+}
+
+.session-stat {
+  padding: 10px 12px;
+  border-radius: 13px;
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.session-stat dt {
+  color: var(--text-dim);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.session-stat dd {
+  margin-top: 4px;
+  font-size: 1.15rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.is-up   { color: #3ddc97; }
+.is-down { color: var(--bad); }
+
+.match-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.match-row {
+  display: grid;
+  grid-template-columns: 3px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 12px 9px 9px;
+  border-radius: 12px;
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.match-flag {
+  align-self: stretch;
+  border-radius: 999px;
+  background: var(--text-dim);
+}
+
+.match-row[data-result="win"]  .match-flag { background: #3ddc97; }
+.match-row[data-result="loss"] .match-flag { background: var(--bad); }
+
+.match-map {
+  font-size: 0.87rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.match-when {
+  margin-top: 1px;
+  color: var(--text-dim);
+  font-size: 0.72rem;
+}
+
+.match-rr {
+  font-size: 0.92rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.match-tier {
+  color: var(--text-dim);
+  font-size: 0.74rem;
+  text-align: right;
+}
+
+/* 5. Auto-queue ========================================================== */
+
+.toggle-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 12px;
+  border-radius: 13px;
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.025);
+  cursor: pointer;
+}
+
+.toggle-row input {
+  margin: 2px 0 0;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  accent-color: var(--accent, #5bb5ff);
+  cursor: pointer;
+}
+
+.toggle-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.toggle-hint {
+  margin-top: 2px;
+  color: var(--text-dim);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.queue-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.queue-chip {
+  padding: 7px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 200ms var(--ease), color 200ms var(--ease), background 200ms var(--ease);
+}
+
+.queue-chip:hover {
+  border-color: var(--hairline-strong);
+  color: var(--text);
+}
+
+.queue-chip.is-active {
+  border-color: color-mix(in srgb, var(--accent, #5bb5ff) 55%, transparent);
+  background: color-mix(in srgb, var(--accent, #5bb5ff) 16%, transparent);
+  color: var(--text);
+}
+
+.party-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+
+/* A row of buttons sitting together, used by the queue controls. */
+.save-row {
+  display: flex;
+  gap: 8px;
+}
+
+@media (max-width: 900px) {
+  .tool-grid {
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  }
+
+  .rank-hero {
+    gap: 12px;
+  }
+
+  .rank-badge {
+    width: 64px;
+    height: 64px;
+  }
+
+  .rank-badge img {
+    width: 54px;
+    height: 54px;
+  }
+}

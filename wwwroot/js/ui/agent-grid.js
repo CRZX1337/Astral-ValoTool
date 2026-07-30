@@ -33,7 +33,9 @@ export function mountAgentGrid() {
   });
 
   document.addEventListener("keydown", (event) => {
-    if (event.key === "/" && !isTypingTarget(event.target)) {
+    // Scoped to this view: the shell has other tools now, and stealing focus
+    // into a search box that is not on screen would be baffling.
+    if (event.key === "/" && document.body.dataset.view === "instalock" && !isTypingTarget(event.target)) {
       event.preventDefault();
       searchEl.focus();
       searchEl.select();
