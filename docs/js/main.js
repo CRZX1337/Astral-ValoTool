@@ -105,6 +105,29 @@ function initChrome() {
   addEventListener("contextmenu", (event) => event.preventDefault());
 }
 
+/* Keeps each range input's `--fill` in step with its value. WebKit gives you
+   no way to style the run behind the knob, so css/controls.css paints the
+   track with a hard-stop gradient and this supplies the stop. */
+function initSliders() {
+  const paint = (slider) => {
+    const min = Number(slider.min) || 0;
+    const span = (Number.isFinite(Number(slider.max)) ? Number(slider.max) : 100) - min;
+    const ratio = span > 0 ? (Number(slider.value) - min) / span : 1;
+    slider.style.setProperty("--fill", `${Math.min(Math.max(ratio, 0), 1) * 100}%`);
+  };
+
+  const paintAll = () => document.querySelectorAll('input[type="range"]').forEach(paint);
+
+  addEventListener("input", (event) => {
+    if (event.target instanceof HTMLInputElement && event.target.type === "range") paint(event.target);
+  });
+
+  /* The demo writes `.value` directly when it opens the settings dialog, which
+     fires no input event -- so repaint whenever the dialog is shown. */
+  document.getElementById("demo-settings-open")?.addEventListener("click", () => setTimeout(paintAll, 0));
+  paintAll();
+}
+
 /* `/` focuses the demo search, mirroring the app's own hotkey. */
 function initHotkey() {
   const input = document.getElementById("demo-search");
@@ -124,6 +147,7 @@ document.documentElement.classList.remove("no-js");
 
 for (const boot of [
   initChrome,
+  initSliders,
   initHeader,
   initTabs,
   initCopy,

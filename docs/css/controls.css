@@ -1,0 +1,423 @@
+/* ==========================================================================
+   Liquid glass controls — site buttons and the demo replica's controls
+
+   The same material as the app's wwwroot/css/controls.css, applied to the
+   site's own `.btn` and to the `rep-` prefixed replica so the demo keeps
+   matching the real thing exactly.
+   ========================================================================== */
+
+@layer controls {
+  :root {
+    --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --spring-soft: cubic-bezier(0.22, 1, 0.36, 1);
+    --press: cubic-bezier(0.2, 0, 0, 1);
+
+    --lg-rim: rgba(255, 255, 255, 0.55);
+    --lg-rim-soft: rgba(255, 255, 255, 0.22);
+    --lg-under: rgba(0, 0, 0, 0.28);
+  }
+
+  /* 1. Buttons =========================================================== */
+
+  .btn,
+  .rep-btn,
+  .rep-btn-quiet,
+  .rep-icon-btn,
+  .rep-back,
+  .rep-chip,
+  .rep-queue-chip {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    -webkit-backdrop-filter: blur(14px) saturate(180%);
+    backdrop-filter: blur(14px) saturate(180%);
+    transition:
+      transform 520ms var(--spring),
+      box-shadow 320ms var(--spring-soft),
+      background 260ms var(--ease),
+      border-color 260ms var(--ease),
+      color 200ms var(--ease);
+  }
+
+  /* The travelling sheen, parked off the left edge until hover. */
+  .btn::after,
+  .rep-btn::after,
+  .rep-btn-quiet::after,
+  .rep-back::after,
+  .rep-chip::after,
+  .rep-queue-chip::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    background: linear-gradient(
+      100deg,
+      transparent 20%,
+      rgba(255, 255, 255, 0.28) 42%,
+      rgba(255, 255, 255, 0.05) 58%,
+      transparent 74%
+    );
+    transform: translateX(-120%);
+    pointer-events: none;
+    transition: transform 720ms var(--spring-soft);
+  }
+
+  .btn:hover::after,
+  .rep-btn:hover:not(:disabled)::after,
+  .rep-btn-quiet:hover::after,
+  .rep-back:hover::after,
+  .rep-chip:hover::after,
+  .rep-queue-chip:hover::after {
+    transform: translateX(120%);
+  }
+
+  .btn {
+    box-shadow:
+      inset 0 1px 0 var(--lg-rim-soft),
+      inset 0 -1px 0 var(--lg-under),
+      0 6px 18px rgba(0, 0, 0, 0.32);
+  }
+
+  .btn:hover {
+    transform: translateY(-2px) scale(1.015);
+  }
+
+  /* Compression is fast and linear; the release springs. */
+  .btn:active,
+  .rep-btn:active:not(:disabled) {
+    transform: translateY(0) scale(0.955);
+    transition-duration: 110ms;
+    transition-timing-function: var(--press);
+  }
+
+  .btn-primary {
+    background: linear-gradient(180deg, #ffffff 0%, #e6e9f2 55%, #d3d7e3 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.18),
+      0 12px 30px rgba(140, 190, 255, 0.18);
+  }
+
+  .btn-primary:hover {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.95),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.18),
+      0 18px 44px rgba(140, 190, 255, 0.3);
+  }
+
+  .btn-ghost {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.045));
+    box-shadow:
+      inset 0 1px 0 var(--lg-rim),
+      inset 0 -1px 0 var(--lg-under),
+      0 6px 18px rgba(0, 0, 0, 0.3);
+  }
+
+  /* --- Replica --- */
+
+  .rep-btn {
+    border-radius: 999px;
+    box-shadow:
+      inset 0 1px 0 var(--lg-rim-soft),
+      inset 0 -1px 0 var(--lg-under),
+      0 6px 18px rgba(0, 0, 0, 0.32);
+  }
+
+  .rep-btn:hover:not(:disabled) {
+    transform: translateY(-2px) scale(1.015);
+  }
+
+  .rep-btn-primary {
+    background: linear-gradient(180deg, #ffffff 0%, #e6e9f2 55%, #d3d7e3 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.18),
+      0 10px 26px var(--accent-glow, rgba(91, 181, 255, 0.38));
+  }
+
+  .rep-btn-ghost {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.045));
+    box-shadow:
+      inset 0 1px 0 var(--lg-rim),
+      inset 0 -1px 0 var(--lg-under),
+      0 6px 18px rgba(0, 0, 0, 0.3);
+  }
+
+  .rep-btn-quiet,
+  .rep-back,
+  .rep-chip,
+  .rep-queue-chip {
+    border-radius: 999px;
+    box-shadow:
+      inset 0 1px 0 var(--lg-rim-soft),
+      0 3px 10px rgba(0, 0, 0, 0.22);
+  }
+
+  .rep-btn-quiet:hover,
+  .rep-back:hover,
+  .rep-chip:hover,
+  .rep-queue-chip:hover {
+    transform: translateY(-1px);
+    box-shadow:
+      inset 0 1px 0 var(--lg-rim),
+      0 6px 16px rgba(0, 0, 0, 0.3);
+  }
+
+  .rep-btn-quiet:active,
+  .rep-back:active,
+  .rep-chip:active,
+  .rep-queue-chip:active {
+    transform: scale(0.94);
+    transition-duration: 100ms;
+  }
+
+  .rep-queue-chip.is-active,
+  .rep-chip[aria-pressed="true"] {
+    box-shadow:
+      inset 0 1px 0 var(--lg-rim),
+      inset 0 0 16px color-mix(in srgb, var(--brand) 22%, transparent),
+      0 4px 16px color-mix(in srgb, var(--brand) 26%, transparent);
+  }
+
+  .rep-icon-btn {
+    border-radius: 999px;
+    box-shadow: inset 0 1px 0 var(--lg-rim-soft);
+  }
+
+  .rep-icon-btn:hover {
+    transform: scale(1.08);
+    box-shadow:
+      inset 0 1px 0 var(--lg-rim),
+      0 4px 14px rgba(0, 0, 0, 0.32);
+  }
+
+  .rep-icon-btn:active {
+    transform: scale(0.92);
+    transition-duration: 100ms;
+  }
+
+  .rep-btn:disabled {
+    transform: none !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+
+  .rep-btn:disabled::after {
+    display: none;
+  }
+
+  /* 2. Sliders =========================================================== */
+  /* --fill is written by js/main.js on every input event. */
+
+  .rep-slider {
+    --fill: 0%;
+    appearance: none;
+    -webkit-appearance: none;
+    width: 100%;
+    height: 22px;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .rep-slider::-webkit-slider-runnable-track {
+    height: 8px;
+    border-radius: 999px;
+    background: linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--brand) 88%, white 12%) 0 var(--fill),
+      rgba(255, 255, 255, 0.09) var(--fill)
+    );
+    box-shadow:
+      inset 0 1px 3px rgba(0, 0, 0, 0.55),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.10);
+    transition: box-shadow 260ms var(--ease);
+  }
+
+  .rep-slider::-moz-range-track {
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.09);
+    box-shadow:
+      inset 0 1px 3px rgba(0, 0, 0, 0.55),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.10);
+  }
+
+  .rep-slider::-moz-range-progress {
+    height: 8px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--brand) 88%, white 12%);
+  }
+
+  .rep-slider::-webkit-slider-thumb {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 22px;
+    height: 22px;
+    margin-top: -7px;
+    border: 0;
+    border-radius: 50%;
+    background:
+      radial-gradient(60% 55% at 50% 22%, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.62) 45%, transparent 70%),
+      linear-gradient(180deg, #ffffff 0%, #e9ecf4 48%, #c9cede 100%);
+    box-shadow:
+      inset 0 -1px 1px rgba(0, 0, 0, 0.18),
+      0 2px 6px rgba(0, 0, 0, 0.5),
+      0 0 0 0 color-mix(in srgb, var(--brand) 40%, transparent);
+    transition:
+      transform 420ms var(--spring),
+      box-shadow 300ms var(--spring-soft);
+  }
+
+  .rep-slider::-moz-range-thumb {
+    width: 22px;
+    height: 22px;
+    border: 0;
+    border-radius: 50%;
+    background: linear-gradient(180deg, #ffffff 0%, #e9ecf4 48%, #c9cede 100%);
+    box-shadow:
+      inset 0 -1px 1px rgba(0, 0, 0, 0.18),
+      0 2px 6px rgba(0, 0, 0, 0.5);
+  }
+
+  .rep-slider:hover::-webkit-slider-thumb,
+  .rep-slider:focus-visible::-webkit-slider-thumb {
+    transform: scale(1.12);
+    box-shadow:
+      inset 0 -1px 1px rgba(0, 0, 0, 0.18),
+      0 3px 10px rgba(0, 0, 0, 0.55),
+      0 0 0 7px color-mix(in srgb, var(--brand) 16%, transparent);
+  }
+
+  .rep-slider:active::-webkit-slider-thumb {
+    transform: scale(1.24);
+    box-shadow:
+      inset 0 -1px 1px rgba(0, 0, 0, 0.18),
+      0 4px 14px rgba(0, 0, 0, 0.6),
+      0 0 0 11px color-mix(in srgb, var(--brand) 22%, transparent);
+  }
+
+  .rep-slider:active::-webkit-slider-runnable-track {
+    box-shadow:
+      inset 0 1px 4px rgba(0, 0, 0, 0.65),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.14);
+  }
+
+  .rep-slider:focus-visible {
+    outline: none;
+  }
+
+  .rep-slider-value {
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.22), rgba(255, 255, 255, 0.05));
+    box-shadow:
+      inset 0 1px 2px rgba(0, 0, 0, 0.4),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.08);
+    transition:
+      border-color 240ms var(--ease),
+      box-shadow 240ms var(--spring-soft);
+  }
+
+  .rep-slider-value:focus {
+    outline: none;
+    border-color: color-mix(in srgb, var(--brand) 55%, transparent);
+    box-shadow:
+      inset 0 1px 2px rgba(0, 0, 0, 0.4),
+      0 0 0 4px color-mix(in srgb, var(--brand) 18%, transparent);
+  }
+
+  /* 3. Toggles =========================================================== */
+
+  .rep-toggle-row {
+    transition:
+      transform 420ms var(--spring),
+      border-color 240ms var(--ease),
+      background 240ms var(--ease),
+      box-shadow 300ms var(--spring-soft);
+  }
+
+  .rep-toggle-row:hover {
+    transform: translateY(-1px);
+    border-color: var(--hairline-strong);
+    box-shadow:
+      inset 0 1px 0 var(--lg-rim-soft),
+      0 6px 16px rgba(0, 0, 0, 0.26);
+  }
+
+  .rep-toggle-row:active {
+    transform: scale(0.99);
+    transition-duration: 110ms;
+  }
+
+  .rep-toggle-row:has(input:checked) {
+    border-color: color-mix(in srgb, var(--brand) 42%, transparent);
+    background: color-mix(in srgb, var(--brand) 10%, transparent);
+  }
+
+  /* 4. Degradation ======================================================= */
+
+  @media (prefers-reduced-motion: reduce) {
+    .btn,
+    .rep-btn,
+    .rep-btn-quiet,
+    .rep-icon-btn,
+    .rep-back,
+    .rep-chip,
+    .rep-queue-chip,
+    .rep-toggle-row,
+    .rep-slider::-webkit-slider-thumb {
+      transition-duration: 1ms;
+    }
+
+    .btn::after,
+    .rep-btn::after,
+    .rep-btn-quiet::after,
+    .rep-back::after,
+    .rep-chip::after,
+    .rep-queue-chip::after {
+      display: none;
+    }
+
+    .btn:hover,
+    .btn:active,
+    .rep-btn:hover:not(:disabled),
+    .rep-icon-btn:hover,
+    .rep-toggle-row:hover {
+      transform: none;
+    }
+  }
+
+  @media (prefers-reduced-transparency: reduce) {
+    .btn,
+    .rep-btn,
+    .rep-btn-quiet,
+    .rep-icon-btn,
+    .rep-back,
+    .rep-chip,
+    .rep-queue-chip {
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .btn::after,
+    .rep-btn::after,
+    .rep-btn-quiet::after,
+    .rep-back::after,
+    .rep-chip::after,
+    .rep-queue-chip::after {
+      display: none;
+    }
+
+    .btn,
+    .rep-btn,
+    .rep-btn-quiet,
+    .rep-icon-btn,
+    .rep-back,
+    .rep-chip,
+    .rep-queue-chip {
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+      box-shadow: none;
+    }
+  }
+}

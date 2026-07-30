@@ -8,6 +8,7 @@ import { getState, loadAgents, loadQueue, loadQueueOptions, loadTracker, subscri
 import { mountAgentGrid } from "./ui/agent-grid.js";
 import { mountAutoQueue } from "./ui/autoqueue.js";
 import { mountControlPanel } from "./ui/control-panel.js";
+import { mountControls } from "./ui/controls.js";
 import { mountHeader } from "./ui/header.js";
 import { mountSettings } from "./ui/settings.js";
 import { mountShell } from "./ui/shell.js";
@@ -30,7 +31,8 @@ const views = [
   mountAutoQueue(),
   mountSettings(),
   mountTooltips(),
-  mountTilt()
+  mountTilt(),
+  mountControls()
 ];
 
 subscribe((state) => {

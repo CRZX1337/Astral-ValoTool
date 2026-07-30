@@ -1,0 +1,415 @@
+/* ==========================================================================
+   Liquid glass controls — buttons, sliders, chips, toggles
+
+   Modelled on Apple's Liquid Glass. The material there is a real-time
+   refraction pass; in CSS the convincing parts are reproducible without it:
+
+     1. capsule geometry
+     2. a bright specular along the top rim and a dark one along the bottom,
+        which is what actually sells "a piece of glass with thickness"
+     3. a blurred, saturated backdrop so the surface picks up what is behind it
+     4. a sheen that travels across on hover
+     5. springy press physics — compress on the way down, overshoot on the
+        way back
+
+   Loaded last on purpose: it upgrades the controls declared in styles.css and
+   css/shell.css rather than duplicating them.
+   ========================================================================== */
+
+:root {
+  /* Overshoots slightly. This is the one that reads as "physical". */
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* Decelerating, no overshoot. For things that must not wobble. */
+  --spring-soft: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --lg-rim: rgba(255, 255, 255, 0.55);
+  --lg-rim-soft: rgba(255, 255, 255, 0.22);
+  --lg-under: rgba(0, 0, 0, 0.28);
+}
+
+/* 1. Buttons ============================================================= */
+
+.btn,
+.btn-quiet,
+.icon-btn,
+.back-btn,
+.queue-chip,
+.chip {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  -webkit-backdrop-filter: blur(14px) saturate(180%);
+  backdrop-filter: blur(14px) saturate(180%);
+  transition:
+    transform 520ms var(--spring),
+    box-shadow 320ms var(--spring-soft),
+    background 260ms var(--ease),
+    border-color 260ms var(--ease),
+    color 200ms var(--ease);
+}
+
+/* The travelling sheen. Parked off the left edge, swept across on hover. */
+.btn::after,
+.btn-quiet::after,
+.back-btn::after,
+.queue-chip::after,
+.chip::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    rgba(255, 255, 255, 0.28) 42%,
+    rgba(255, 255, 255, 0.05) 58%,
+    transparent 74%
+  );
+  transform: translateX(-120%);
+  pointer-events: none;
+  transition: transform 720ms var(--spring-soft);
+}
+
+.btn:hover:not(:disabled)::after,
+.btn-quiet:hover:not(:disabled)::after,
+.back-btn:hover::after,
+.queue-chip:hover:not(:disabled)::after,
+.chip:hover::after {
+  transform: translateX(120%);
+}
+
+/* Capsules, as the material calls for. */
+.btn {
+  border-radius: 999px;
+  box-shadow:
+    inset 0 1px 0 var(--lg-rim-soft),
+    inset 0 -1px 0 var(--lg-under),
+    0 6px 18px rgba(0, 0, 0, 0.32);
+}
+
+.btn:hover:not(:disabled) {
+  transform: translateY(-2px) scale(1.015);
+}
+
+/* Compression is fast and linear; the release springs. Doing both on the same
+   curve makes the press feel mushy. */
+.btn:active:not(:disabled) {
+  transform: translateY(0) scale(0.955);
+  transition-duration: 110ms;
+  transition-timing-function: var(--press, cubic-bezier(0.2, 0, 0, 1));
+}
+
+.btn-primary {
+  background: linear-gradient(180deg, #ffffff 0%, #e6e9f2 55%, #d3d7e3 100%);
+  color: #08090b;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.18),
+    0 10px 26px var(--accent-glow);
+}
+
+.btn-primary:hover:not(:disabled) {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.18),
+    0 16px 38px var(--accent-glow);
+}
+
+.btn-ghost {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.045));
+  border-color: var(--hairline-strong);
+  color: var(--text);
+  box-shadow:
+    inset 0 1px 0 var(--lg-rim),
+    inset 0 -1px 0 var(--lg-under),
+    0 6px 18px rgba(0, 0, 0, 0.3);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: linear-gradient(180deg, rgba(255, 90, 104, 0.20), rgba(255, 90, 104, 0.09));
+  border-color: rgba(255, 90, 104, 0.45);
+  color: #ff929b;
+}
+
+.btn-quiet,
+.back-btn,
+.queue-chip,
+.chip {
+  border-radius: 999px;
+  box-shadow:
+    inset 0 1px 0 var(--lg-rim-soft),
+    0 3px 10px rgba(0, 0, 0, 0.22);
+}
+
+.btn-quiet:hover:not(:disabled),
+.back-btn:hover,
+.queue-chip:hover:not(:disabled),
+.chip:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 var(--lg-rim),
+    0 6px 16px rgba(0, 0, 0, 0.3);
+}
+
+.btn-quiet:active:not(:disabled),
+.back-btn:active,
+.queue-chip:active:not(:disabled),
+.chip:active {
+  transform: scale(0.94);
+  transition-duration: 100ms;
+}
+
+/* The selected chip glows from within rather than just changing colour. */
+.queue-chip.is-active,
+.chip.is-active {
+  box-shadow:
+    inset 0 1px 0 var(--lg-rim),
+    inset 0 0 16px color-mix(in srgb, var(--accent, #5bb5ff) 22%, transparent),
+    0 4px 16px color-mix(in srgb, var(--accent, #5bb5ff) 26%, transparent);
+}
+
+.icon-btn {
+  border-radius: 999px;
+  box-shadow: inset 0 1px 0 var(--lg-rim-soft);
+}
+
+.icon-btn:hover {
+  transform: scale(1.08);
+  box-shadow:
+    inset 0 1px 0 var(--lg-rim),
+    0 4px 14px rgba(0, 0, 0, 0.32);
+}
+
+.icon-btn:active {
+  transform: scale(0.92);
+  transition-duration: 100ms;
+}
+
+/* A disabled control is inert glass: no lift, no sheen, no depth. */
+.btn:disabled,
+.queue-chip:disabled {
+  transform: none !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.btn:disabled::after,
+.queue-chip:disabled::after {
+  display: none;
+}
+
+/* 2. Sliders ============================================================= */
+/* --fill is written by js/ui/controls.js on every input event; without it the
+   track still renders, just without the coloured run. */
+
+.slider {
+  --fill: 0%;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 22px;
+  background: transparent;
+  cursor: pointer;
+}
+
+/* The groove: cut into the surface, so the shadow is on the inside and the
+   highlight sits along the bottom lip where light would collect. */
+.slider::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--accent, #5bb5ff) 88%, white 12%) 0 var(--fill),
+    rgba(255, 255, 255, 0.09) var(--fill)
+  );
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.55),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.10);
+  transition: box-shadow 260ms var(--ease);
+}
+
+.slider::-moz-range-track {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.09);
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.55),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.10);
+}
+
+.slider::-moz-range-progress {
+  height: 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent, #5bb5ff) 88%, white 12%);
+}
+
+/* The knob: a glass bead. Bright specular across the top third, shadow
+   underneath, and a halo that blooms while it is being dragged. */
+.slider::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  margin-top: -7px; /* centres a 22px knob on an 8px track */
+  border: 0;
+  border-radius: 50%;
+  background:
+    radial-gradient(60% 55% at 50% 22%, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.62) 45%, transparent 70%),
+    linear-gradient(180deg, #ffffff 0%, #e9ecf4 48%, #c9cede 100%);
+  box-shadow:
+    inset 0 -1px 1px rgba(0, 0, 0, 0.18),
+    0 2px 6px rgba(0, 0, 0, 0.5),
+    0 0 0 0 color-mix(in srgb, var(--accent, #5bb5ff) 40%, transparent);
+  transition:
+    transform 420ms var(--spring),
+    box-shadow 300ms var(--spring-soft);
+}
+
+.slider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #ffffff 0%, #e9ecf4 48%, #c9cede 100%);
+  box-shadow:
+    inset 0 -1px 1px rgba(0, 0, 0, 0.18),
+    0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.slider:hover::-webkit-slider-thumb,
+.slider:focus-visible::-webkit-slider-thumb {
+  transform: scale(1.12);
+  box-shadow:
+    inset 0 -1px 1px rgba(0, 0, 0, 0.18),
+    0 3px 10px rgba(0, 0, 0, 0.55),
+    0 0 0 7px color-mix(in srgb, var(--accent, #5bb5ff) 16%, transparent);
+}
+
+/* Grabbed: the bead swells and the halo opens up. */
+.slider:active::-webkit-slider-thumb {
+  transform: scale(1.24);
+  box-shadow:
+    inset 0 -1px 1px rgba(0, 0, 0, 0.18),
+    0 4px 14px rgba(0, 0, 0, 0.6),
+    0 0 0 11px color-mix(in srgb, var(--accent, #5bb5ff) 22%, transparent);
+}
+
+.slider:active::-webkit-slider-runnable-track {
+  box-shadow:
+    inset 0 1px 4px rgba(0, 0, 0, 0.65),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.14);
+}
+
+.slider:focus-visible {
+  outline: none;
+}
+
+/* Number field beside the slider: the same recessed glass as the groove. */
+.slider-value {
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.22), rgba(255, 255, 255, 0.05));
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.4),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.08);
+  transition:
+    border-color 240ms var(--ease),
+    box-shadow 240ms var(--spring-soft);
+}
+
+.slider-value:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent, #5bb5ff) 55%, transparent);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.4),
+    0 0 0 4px color-mix(in srgb, var(--accent, #5bb5ff) 18%, transparent);
+}
+
+/* 3. Toggles ============================================================= */
+
+.toggle-row {
+  transition:
+    transform 420ms var(--spring),
+    border-color 240ms var(--ease),
+    background 240ms var(--ease),
+    box-shadow 300ms var(--spring-soft);
+}
+
+.toggle-row:hover {
+  transform: translateY(-1px);
+  border-color: var(--hairline-strong);
+  box-shadow:
+    inset 0 1px 0 var(--lg-rim-soft),
+    0 6px 16px rgba(0, 0, 0, 0.26);
+}
+
+.toggle-row:active {
+  transform: scale(0.99);
+  transition-duration: 110ms;
+}
+
+.toggle-row:has(input:checked) {
+  border-color: color-mix(in srgb, var(--accent, #5bb5ff) 42%, transparent);
+  background: color-mix(in srgb, var(--accent, #5bb5ff) 10%, transparent);
+}
+
+/* 4. Degradation ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .btn,
+  .btn-quiet,
+  .icon-btn,
+  .back-btn,
+  .queue-chip,
+  .chip,
+  .toggle-row,
+  .slider::-webkit-slider-thumb {
+    transition-duration: 1ms;
+  }
+
+  .btn::after,
+  .btn-quiet::after,
+  .back-btn::after,
+  .queue-chip::after,
+  .chip::after {
+    display: none;
+  }
+
+  .btn:hover:not(:disabled),
+  .btn:active:not(:disabled),
+  .icon-btn:hover,
+  .toggle-row:hover {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .btn,
+  .btn-quiet,
+  .icon-btn,
+  .back-btn,
+  .queue-chip,
+  .chip {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .btn::after,
+  .btn-quiet::after,
+  .back-btn::after,
+  .queue-chip::after,
+  .chip::after {
+    display: none;
+  }
+
+  .btn,
+  .btn-quiet,
+  .icon-btn,
+  .back-btn,
+  .queue-chip,
+  .chip {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: none;
+  }
+}
