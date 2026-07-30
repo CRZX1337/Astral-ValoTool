@@ -1,3 +1,4 @@
+using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 using Astral.Models;
 using Astral.Services;
@@ -223,6 +224,7 @@ public sealed class DesktopAppForm : Form
             Directory.CreateDirectory(BrowserDataFolder);
 
             await _webView.EnsureCoreWebView2Async();
+            HardenBrowser(_webView.CoreWebView2.Settings);
             _webView.Source = new Uri(_url);
         }
         catch (Exception ex)
@@ -230,6 +232,26 @@ public sealed class DesktopAppForm : Form
             _webView.Visible = false;
             ShowInitializationError(ex);
         }
+    }
+
+    /// <summary>
+    /// Turns WebView2 from a browser back into an application shell.
+    ///
+    /// Left alone it brings its whole chrome along: right-click opens Back /
+    /// Reload / Save as / Print / Inspect, and F5, Ctrl+R, Ctrl+P and F12 all
+    /// work. None of that means anything in a window with no address bar, and
+    /// Reload in particular just drops whatever the user was doing.
+    ///
+    /// Text selection is handled in CSS rather than here -- it has to stay
+    /// available inside the input fields.
+    /// </summary>
+    private static void HardenBrowser(CoreWebView2Settings settings)
+    {
+        settings.AreDefaultContextMenusEnabled = false;
+        settings.AreBrowserAcceleratorKeysEnabled = false;
+        settings.AreDevToolsEnabled = false;
+        settings.IsZoomControlEnabled = false;
+        settings.IsStatusBarEnabled = false;
     }
 
     private void ShowInitializationError(Exception ex)

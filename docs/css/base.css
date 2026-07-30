@@ -36,6 +36,25 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+
+    /* Matches the app: no drag-selection anywhere. Exemptions follow. */
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* The demo replica has real inputs -- typing in a field you cannot select
+     inside is miserable, so form controls keep normal behaviour. */
+  input,
+  textarea,
+  select,
+  [contenteditable] {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  img {
+    -webkit-user-drag: none;
+    user-select: none;
   }
 
   /* Film grain, ~2.5% opacity. The page is one long near-black gradient, and

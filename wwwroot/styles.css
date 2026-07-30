@@ -114,6 +114,30 @@ body {
   height: 100%;
 }
 
+/* This is an application window, not a document: dragging a selection across
+   the agent grid or the panel only ever produces stray blue highlights. Form
+   fields are exempted below -- typing in a box you cannot select inside is
+   miserable. */
+body {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input,
+textarea,
+select,
+[contenteditable] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Portraits and the logo are decoration; dragging one out of the window as a
+   file or an image is never what someone meant to do. */
+img {
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
 body {
   margin: 0;
   overflow: hidden;

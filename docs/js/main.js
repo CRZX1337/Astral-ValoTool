@@ -97,6 +97,14 @@ function initCopy() {
   }
 }
 
+/* Right-click is suppressed so the site behaves like the app window it is
+   showing off. Worth being honest about what this is: a presentation choice,
+   not protection — the page source is a keystroke away either way, and the
+   code blocks keep their Copy buttons so nobody is stuck. */
+function initChrome() {
+  addEventListener("contextmenu", (event) => event.preventDefault());
+}
+
 /* `/` focuses the demo search, mirroring the app's own hotkey. */
 function initHotkey() {
   const input = document.getElementById("demo-search");
@@ -115,6 +123,7 @@ function initHotkey() {
 document.documentElement.classList.remove("no-js");
 
 for (const boot of [
+  initChrome,
   initHeader,
   initTabs,
   initCopy,

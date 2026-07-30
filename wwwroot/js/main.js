@@ -15,6 +15,12 @@ import { mountTilt } from "./ui/tilt.js";
 import { mountTooltips } from "./ui/tooltip.js";
 import { mountTracker } from "./ui/tracker.js";
 
+// Belt and braces for the context menu: DesktopAppForm turns it off in
+// WebView2 itself, which is the real fix, but that setting is only applied
+// once the runtime is up. This also covers the case of the UI being opened in
+// an ordinary browser via the loopback port.
+document.addEventListener("contextmenu", (event) => event.preventDefault());
+
 const views = [
   mountShell(),
   mountHeader(),
