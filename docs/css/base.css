@@ -34,7 +34,28 @@
     font-size: clamp(0.95rem, 0.9rem + 0.25vw, 1.0625rem);
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+  }
+
+  /* Film grain, ~2.5% opacity. The page is one long near-black gradient, and
+     8-bit colour cannot resolve it smoothly -- without this you get visible
+     banding rings across every large surface. Static and fixed, so it paints
+     once and then only composites. */
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 300;
+    opacity: 0.025;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  @media (forced-colors: active) {
+    body::after {
+      display: none;
+    }
   }
 
   img,

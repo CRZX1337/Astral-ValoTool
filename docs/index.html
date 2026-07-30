@@ -45,10 +45,15 @@
      every frame and destroys performance in Firefox. -->
 <svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
   <defs>
-    <filter id="astral-liquid" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
-      <feTurbulence type="fractalNoise" baseFrequency="0.008 0.014" numOctaves="2" seed="7" result="noise"/>
-      <feGaussianBlur in="noise" stdDeviation="1.6" result="soft"/>
-      <feDisplacementMap in="SourceGraphic" in2="soft" scale="22" xChannelSelector="R" yChannelSelector="G"/>
+    <filter id="astral-liquid" x="-25%" y="-25%" width="150%" height="150%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.006 0.011" numOctaves="2" seed="7" result="noise"/>
+      <!-- Heavier blur on the noise makes the warp long and rolling rather
+           than grainy; a sharp displacement map produces visibly jagged
+           edges wherever the gradient has any contrast. -->
+      <feGaussianBlur in="noise" stdDeviation="3.2" result="soft"/>
+      <feDisplacementMap in="SourceGraphic" in2="soft" scale="13" xChannelSelector="R" yChannelSelector="G" result="warped"/>
+      <!-- Final soften: takes the last aliasing off the displaced result. -->
+      <feGaussianBlur in="warped" stdDeviation="0.6"/>
     </filter>
   </defs>
 </svg>
@@ -382,42 +387,95 @@
         </p>
       </div>
 
-      <div class="demo-frame glass glass-rim reveal" id="demo" data-phase="idle" data-role="unknown">
-        <p class="demo-note">
-          <span class="pill">Preview</span>
-          <span>Simulated — it isn't talking to a game client. The real app does this against your local Valorant.</span>
-        </p>
+      <p class="demo-note reveal">
+        <span class="pill">Preview</span>
+        <span>A faithful rebuild of the desktop UI. Simulated — it isn't talking to a game
+        client; the real app runs this against your local Valorant.</span>
+      </p>
 
-        <div class="demo-toolbar">
-          <label class="demo-search" for="demo-search">
-            <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="6"/><path d="m13.5 13.5 4 4"/></svg>
-            <input id="demo-search" type="search" placeholder="Search agents" autocomplete="off" spellcheck="false" aria-label="Search agents">
-            <kbd aria-hidden="true">/</kbd>
-          </label>
+      <!-- Replica of the app shell. Class names are prefixed rep- so they can
+           mirror wwwroot/styles.css exactly without colliding with the site. -->
+      <!-- id is demo-app, not demo: the enclosing <section> already owns #demo
+           as the nav anchor, and a duplicate id makes getElementById pick the
+           section instead of this. -->
+      <div class="rep reveal" id="demo-app" data-phase="idle" data-role="unknown">
+        <header class="rep-topbar rep-glass">
+          <div class="rep-brand">
+            <img class="rep-brand-mark" src="assets/img/logo-256.png" alt="" width="34" height="34" decoding="async">
+            <span class="rep-brand-text">
+              <strong>Valorant</strong>
+              <span>Astral</span>
+            </span>
+          </div>
 
-          <div class="demo-filters" id="demo-filters" role="group" aria-label="Filter by role"></div>
-          <span class="demo-count" id="demo-count" aria-live="polite"></span>
-        </div>
-
-        <div class="agent-grid clips" id="demo-grid" role="listbox" aria-label="Agents" tabindex="0"></div>
-        <p class="demo-empty" id="demo-empty" hidden></p>
-
-        <div class="demo-panel">
-          <div class="demo-status">
-            <span class="pill phase-pill">
-              <span class="phase-dot" aria-hidden="true"></span>
+          <div class="rep-topbar-status">
+            <span class="rep-notice-pill" id="demo-notice" hidden>Portraits unavailable</span>
+            <span class="rep-phase-pill">
+              <span class="rep-phase-dot" aria-hidden="true"></span>
               <span id="demo-phase">Idle</span>
             </span>
-            <p class="demo-status-text" id="demo-status" aria-live="polite">Pick an agent to arm the loop.</p>
+            <span class="rep-icon-btn" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54A.48.48 0 0 0 13.9 2h-3.8a.48.48 0 0 0-.47.41l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.47a.48.48 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.8c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/></svg>
+            </span>
+          </div>
+        </header>
+
+        <div class="rep-browser">
+          <div class="rep-toolbar rep-glass">
+            <label class="rep-search" for="demo-search">
+              <svg class="rep-search-icon" viewBox="0 0 20 20" aria-hidden="true">
+                <circle cx="9" cy="9" r="6"></circle>
+                <line x1="13.5" y1="13.5" x2="17.5" y2="17.5"></line>
+              </svg>
+              <input id="demo-search" type="search" placeholder="Search agents" autocomplete="off" spellcheck="false" aria-label="Search agents">
+              <kbd class="rep-search-key" aria-hidden="true">/</kbd>
+            </label>
+
+            <div class="rep-filters" id="demo-filters" role="group" aria-label="Filter by role"></div>
+            <span class="rep-count" id="demo-count" aria-live="polite"></span>
           </div>
 
-          <div class="demo-actions">
-            <button class="btn btn-primary" type="button" id="demo-start" disabled>
-              <span id="demo-start-label">Start locking</span>
-            </button>
-            <button class="btn btn-ghost" type="button" id="demo-stop" disabled>Stop</button>
+          <div class="rep-grid-scroll">
+            <div class="agent-grid" id="demo-grid" role="listbox" aria-label="Agents" tabindex="0"></div>
+            <p class="rep-grid-empty" id="demo-empty" hidden></p>
           </div>
         </div>
+
+        <aside class="rep-panel rep-glass">
+          <div class="rep-hero-art" id="demo-art" data-art="none">
+            <img class="rep-hero-portrait" id="demo-portrait" alt="" decoding="async" hidden>
+            <img class="rep-hero-watermark" id="demo-watermark" src="assets/img/logo-256.png" alt="">
+            <span class="rep-hero-monogram" id="demo-monogram" aria-hidden="true">?</span>
+            <span class="rep-hero-badge" id="demo-badge" hidden>Locked</span>
+          </div>
+
+          <div class="rep-identity">
+            <p class="rep-eyebrow">Target agent</p>
+            <p class="rep-name" id="demo-name">No agent selected</p>
+            <span class="rep-role-chip" id="demo-role" hidden></span>
+          </div>
+
+          <div class="rep-status">
+            <p class="rep-status-line" id="demo-status" aria-live="polite">Waiting…</p>
+            <dl class="rep-meta">
+              <div>
+                <dt>Loop</dt>
+                <dd id="demo-loop">Standby</dd>
+              </div>
+              <div>
+                <dt>Updated</dt>
+                <dd id="demo-updated">—</dd>
+              </div>
+            </dl>
+          </div>
+
+          <div class="rep-actions">
+            <button class="rep-btn rep-btn-primary" type="button" id="demo-start" disabled>
+              <span id="demo-start-label">Start locking</span>
+            </button>
+            <button class="rep-btn rep-btn-ghost" type="button" id="demo-stop" disabled>Stop</button>
+          </div>
+        </aside>
       </div>
     </div>
   </section>
@@ -801,10 +859,11 @@ cd Astral-ValoTool</code></pre>
       <img alt="" loading="lazy" decoding="async">
       <span class="agent-monogram" aria-hidden="true"></span>
     </span>
-    <span>
+    <span class="agent-body">
       <span class="agent-name"></span>
       <span class="agent-role"></span>
     </span>
+    <span class="agent-flag" aria-hidden="true"></span>
   </button>
 </template>
 

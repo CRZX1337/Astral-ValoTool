@@ -116,6 +116,13 @@
     pointer-events: none;
     filter: url(#astral-liquid);
     mix-blend-mode: screen;
+    /* Feather the sheet to nothing well inside the box. Masking runs *after*
+       filtering, so the displaced result can never end on a hard edge -- the
+       warp only ever moves pixels that are already fading out. Without this
+       the turbulence drags the panel's own boundary into view as a visible
+       seam along the bottom and corners. */
+    -webkit-mask-image: radial-gradient(118% 118% at 50% 42%, #000 38%, transparent 82%);
+    mask-image: radial-gradient(118% 118% at 50% 42%, #000 38%, transparent 82%);
   }
 
   /* Chromium-only: warps what is actually *behind* the panel. Safari and

@@ -104,6 +104,61 @@ vec3 env(vec3 d) {
   return col;
 }
 
+/* Everything the glass does at a surface point. Split out of main() so the
+   anti-aliasing path can shade a near-miss point with the same code. */
+vec3 shade(vec3 p, vec3 rd) {
+  vec3 n = normalAt(p);
+
+  float f = pow(1.0 - max(dot(-rd, n), 0.0), 5.0);
+  f = 0.04 + 0.96 * f;                       // Schlick, IOR ~1.45
+
+  vec3 refl = env(reflect(rd, n));
+
+  /* Dispersion: the same path traced at three IORs, one per channel. Costs
+     three inside-marches and is the whole reason the edges fringe. */
+  float iors[3] = float[3](1.44, 1.45, 1.46);
+  vec3 refr = vec3(0.0);
+  float thickness = 0.0;
+
+  for (int c = 0; c < 3; c++) {
+    vec3 rdi = refract(rd, n, 1.0 / iors[c]);
+
+    /* March the negated field to find where the ray leaves the solid. */
+    float ti = 0.02;
+    for (int j = 0; j < INNER; j++) {
+      float di = -map(p + rdi * ti);
+      if (di < EPS) break;
+      ti += max(di * 0.8, 0.012);
+    }
+    if (c == 1) thickness = ti;   // green channel stands in for the whole
+
+    vec3 pe = p + rdi * ti;
+    vec3 ne = -normalAt(pe);
+    vec3 rdo = refract(rdi, ne, iors[c]);
+    /* Zero vector means total internal reflection. */
+    if (dot(rdo, rdo) < 0.5) rdo = reflect(rdi, ne);
+
+    refr[c] = env(rdo)[c];
+  }
+
+  /* Beer-Lambert absorption. Thick parts of the solid go deep blue while
+     thin edges stay clear -- this is what gives the star volume instead of
+     reading as a flat outline over a dark background. */
+  refr *= exp(-thickness * vec3(2.4, 1.4, 0.65));
+
+  vec3 col = mix(refr, refl, f);
+
+  /* Faint internal scatter, so the mass of the star glows from within
+     rather than only at its silhouette. */
+  col += vec3(0.16, 0.42, 0.95) * (1.0 - exp(-thickness * 1.7)) * 0.34;
+
+  float sp = max(dot(reflect(rd, n), KEY), 0.0);
+  col += vec3(1.0) * pow(sp, 90.0) * 1.8;                 // tight glint
+  col += vec3(0.75, 0.88, 1.00) * pow(sp, 12.0) * 0.24;   // broad sheen
+  col += vec3(0.35, 0.60, 1.00) * f * 0.40;               // fresnel rim
+  return col;
+}
+
 void main() {
   vec2 uv = (gl_FragCoord.xy - 0.5 * uRes) / uRes.y;
 
@@ -115,82 +170,48 @@ void main() {
   vec3 ro = vec3(0.0, uScroll * 0.7, 3.0);
   vec3 rd = normalize(vec3(uv * 1.08, -1.6));
 
+  /* Half-width of one pixel's cone, per unit of ray distance. Used below to
+     turn "how close did we pass" into a coverage value. */
+  float px = 1.6 / uRes.y;
+
   float t = 0.0;
   bool hit = false;
+  /* Closest approach, measured in pixel widths, and where it happened. */
+  float best = 1e9;
+  vec3 pBest = ro + rd * 3.0;
 
   for (int i = 0; i < STEPS; i++) {
     vec3 p = ro + rd * t;
     float d = map(p);
-    if (d < EPS) { hit = true; break; }
+
+    float ratio = d / max(t * px, 1e-5);
+    if (ratio < best) { best = ratio; pBest = p; }
+
+    if (d < EPS) { hit = true; pBest = p; break; }
     /* 0.75 understeps deliberately: the domain warp makes map() slightly
        non-Lipschitz, and full steps would punch through thin points. */
     t += d * 0.75;
     if (t > MAX_DIST) break;
   }
 
-  vec3 col;
+  vec3 bg = env(rd);
 
-  if (!hit) {
-    col = env(rd);
-  } else {
-    vec3 p = ro + rd * t;
-    vec3 n = normalAt(p);
+  /* Analytic silhouette anti-aliasing. A binary hit test makes the star's
+     outline -- and the bright Fresnel rim sitting exactly on it -- stair-step
+     badly. Rays that pass within a pixel of the surface instead get partial
+     coverage and are shaded from their closest-approach point, which costs
+     one extra compare per march step rather than a second sample. */
+  float cover = hit ? 1.0 : 1.0 - smoothstep(0.0, 1.0, best);
 
-    float f = pow(1.0 - max(dot(-rd, n), 0.0), 5.0);
-    f = 0.04 + 0.96 * f;                       // Schlick, IOR ~1.45
-
-    vec3 refl = env(reflect(rd, n));
-
-    /* Dispersion: the same path traced at three IORs, one per channel. Costs
-       three inside-marches and is the whole reason the edges fringe. */
-    float iors[3] = float[3](1.44, 1.45, 1.46);
-    vec3 refr = vec3(0.0);
-    float thickness = 0.0;
-
-    for (int c = 0; c < 3; c++) {
-      vec3 rdi = refract(rd, n, 1.0 / iors[c]);
-
-      /* March the negated field to find where the ray leaves the solid. */
-      float ti = 0.02;
-      for (int j = 0; j < INNER; j++) {
-        float di = -map(p + rdi * ti);
-        if (di < EPS) break;
-        ti += max(di * 0.8, 0.012);
-      }
-      if (c == 1) thickness = ti;   // green channel stands in for the whole
-
-      vec3 pe = p + rdi * ti;
-      vec3 ne = -normalAt(pe);
-      vec3 rdo = refract(rdi, ne, iors[c]);
-      /* Zero vector means total internal reflection. */
-      if (dot(rdo, rdo) < 0.5) rdo = reflect(rdi, ne);
-
-      refr[c] = env(rdo)[c];
-    }
-
-    /* Beer-Lambert absorption. Thick parts of the solid go deep blue while
-       thin edges stay clear -- this is what gives the star volume instead of
-       reading as a flat outline over a dark background. */
-    refr *= exp(-thickness * vec3(2.4, 1.4, 0.65));
-
-    col = mix(refr, refl, f);
-
-    /* Faint internal scatter, so the mass of the star glows from within
-       rather than only at its silhouette. */
-    col += vec3(0.16, 0.42, 0.95) * (1.0 - exp(-thickness * 1.7)) * 0.34;
-
-    float sp = max(dot(reflect(rd, n), KEY), 0.0);
-    col += vec3(1.0) * pow(sp, 90.0) * 1.8;                 // tight glint
-    col += vec3(0.75, 0.88, 1.00) * pow(sp, 12.0) * 0.24;   // broad sheen
-    col += vec3(0.35, 0.60, 1.00) * f * 0.40;               // fresnel rim
-  }
+  vec3 col = bg;
+  if (cover > 0.002) col = mix(bg, shade(pBest, rd), cover);
 
   col = col / (1.0 + col);
 
   /* Hash dither. Non-optional: a near-black gradient bands badly at 8 bits,
      and the banding is what would make this look cheap. */
-  float d = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
-  col += (d - 0.5) / 255.0;
+  float dh = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+  col += (dh - 0.5) / 255.0;
 
   fragColor = vec4(col, 1.0);
 }`;

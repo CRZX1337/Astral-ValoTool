@@ -1,9 +1,9 @@
-/* Interactive agent grid.
+/* Interactive agent grid — a replica of Astral's desktop UI.
 
-   A replica of Astral's picker. Portraits come from valorant-api.com, the same
-   source the real app uses at runtime. The lock sequence is simulated -- there
-   is no game client in a browser tab -- but the phases, labels and colours are
-   the ones the app actually reports. */
+   Portraits come from valorant-api.com, the same source the real app uses at
+   runtime. The lock sequence is simulated (there is no game client in a
+   browser tab) but every phase, loop label and status string below is one the
+   app actually reports, so what you see here is what you get. */
 
 const API = "https://valorant-api.com/v1/agents?isPlayableCharacter=true";
 const CACHE_KEY = "astral:agents";
@@ -34,6 +34,26 @@ function monogram(name) {
   return (parts.length > 1 ? parts.slice(0, 2).map((p) => p[0]).join("") : name[0]).toUpperCase();
 }
 
+const clock = () =>
+  new Date().toLocaleTimeString("en-GB", { hour12: false });
+
+/* One retry that bypasses the HTTP cache. A stale or partially-written cache
+   entry for this URL otherwise fails every load for the life of the browser
+   profile, permanently downgrading the grid to monograms. `reload` refetches
+   and repairs the entry rather than skipping the cache like `no-store`. */
+async function request(url, signal) {
+  try {
+    const response = await fetch(url, { signal });
+    if (!response.ok) throw new Error(String(response.status));
+    return response;
+  } catch (error) {
+    if (signal.aborted) throw error;
+    const retry = await fetch(url, { signal, cache: "reload" });
+    if (!retry.ok) throw new Error(String(retry.status));
+    return retry;
+  }
+}
+
 async function loadAgents() {
   const cached = sessionStorage.getItem(CACHE_KEY);
   if (cached) {
@@ -49,16 +69,16 @@ async function loadAgents() {
   const timer = setTimeout(() => controller.abort(), TIMEOUT);
 
   try {
-    const response = await fetch(API, { signal: controller.signal });
-    if (!response.ok) throw new Error(String(response.status));
+    const response = await request(API, controller.signal);
 
     const agents = (await response.json()).data
       .map((agent) => ({
         name: agent.displayName,
         role: agent.role?.displayName ?? "Unlisted",
-        /* bustPortrait crops well into a square tile; displayIcon is the
-           smaller safety net. */
-        portrait: agent.bustPortrait ?? agent.displayIcon ?? null,
+        /* The app prefers the tall portrait for its panel and crops the same
+           image into the small card. */
+        portrait: agent.fullPortraitV2 ?? agent.fullPortrait ?? agent.bustPortrait ?? null,
+        icon: agent.displayIcon ?? null,
         tint: agent.backgroundGradientColors?.[0]
           ? `#${agent.backgroundGradientColors[0].slice(0, 6)}`
           : null,
@@ -77,19 +97,32 @@ async function loadAgents() {
 }
 
 export async function initDemo() {
-  const root = document.getElementById("demo");
+  const root = document.getElementById("demo-app");
   const grid = document.getElementById("demo-grid");
   const filters = document.getElementById("demo-filters");
   const search = document.getElementById("demo-search");
   const count = document.getElementById("demo-count");
   const empty = document.getElementById("demo-empty");
-  const phaseLabel = document.getElementById("demo-phase");
-  const statusLine = document.getElementById("demo-status");
-  const startBtn = document.getElementById("demo-start");
-  const startLabel = document.getElementById("demo-start-label");
-  const stopBtn = document.getElementById("demo-stop");
+  const notice = document.getElementById("demo-notice");
   const template = document.getElementById("agent-card-template");
   if (!root || !grid || !template) return;
+
+  const panel = {
+    phase: document.getElementById("demo-phase"),
+    art: document.getElementById("demo-art"),
+    portrait: document.getElementById("demo-portrait"),
+    watermark: document.getElementById("demo-watermark"),
+    monogram: document.getElementById("demo-monogram"),
+    badge: document.getElementById("demo-badge"),
+    name: document.getElementById("demo-name"),
+    role: document.getElementById("demo-role"),
+    status: document.getElementById("demo-status"),
+    loop: document.getElementById("demo-loop"),
+    updated: document.getElementById("demo-updated"),
+    start: document.getElementById("demo-start"),
+    startLabel: document.getElementById("demo-start-label"),
+    stop: document.getElementById("demo-stop"),
+  };
 
   /* Skeletons while the request is in flight, matching the app's 12. */
   grid.innerHTML = '<div class="agent-skeleton"></div>'.repeat(12);
@@ -107,9 +140,8 @@ export async function initDemo() {
   for (const name of ROLES) {
     const chip = document.createElement("button");
     chip.type = "button";
-    chip.className = "chip";
+    chip.className = "rep-chip";
     chip.textContent = name;
-    chip.dataset.role = name.toLowerCase();
     chip.setAttribute("aria-pressed", String(name === role));
     chip.addEventListener("click", () => {
       role = name;
@@ -133,7 +165,7 @@ export async function initDemo() {
     render();
   });
 
-  /* --- Rendering ------------------------------------------------------- */
+  /* --- Grid ------------------------------------------------------------ */
 
   function visible() {
     return agents.filter(
@@ -149,26 +181,24 @@ export async function initDemo() {
 
     for (const agent of list) {
       const card = template.content.firstElementChild.cloneNode(true);
-      const art = card.querySelector(".agent-art");
       const img = card.querySelector("img");
-      const mono = card.querySelector(".agent-monogram");
+      const isTarget = agent.name === selected?.name;
 
       card.dataset.role = agent.role.toLowerCase();
       card.dataset.name = agent.name;
-      card.setAttribute("aria-selected", String(agent.name === selected?.name));
+      card.setAttribute("aria-selected", String(isTarget));
+      if (isTarget && run) card.dataset.flag = root.dataset.phase === "locked" ? "locked" : "target";
+
       card.querySelector(".agent-name").textContent = agent.name;
       card.querySelector(".agent-role").textContent = agent.role;
-      mono.textContent = monogram(agent.name);
+      card.querySelector(".agent-monogram").textContent = monogram(agent.name);
 
-      /* Per-agent tint from the API's own gradient, layered over the role
-         accent so the tile still reads as that role. */
-      if (agent.tint) {
-        art.style.background =
-          `radial-gradient(circle at 50% 16%, ${agent.tint}66, transparent 72%), rgba(0,0,0,.28)`;
-      }
+      /* --card-tint drives the card's radial wash, exactly as in the app. */
+      if (agent.tint) card.style.setProperty("--card-tint", agent.tint);
 
-      if (agent.portrait) {
-        img.src = agent.portrait;
+      const art = agent.portrait ?? agent.icon;
+      if (art) {
+        img.src = art;
         img.addEventListener("load", () => img.classList.add("is-loaded"), { once: true });
         /* A dead image URL just leaves the monogram showing. */
         img.addEventListener("error", () => img.remove(), { once: true });
@@ -184,7 +214,7 @@ export async function initDemo() {
     if (empty) {
       empty.hidden = list.length > 0;
       empty.textContent = query
-        ? `No agent matches "${search.value.trim()}".`
+        ? `Nothing matches "${search.value.trim()}".`
         : "No agents in this role.";
     }
   }
@@ -195,17 +225,14 @@ export async function initDemo() {
     if (!cards.length) return;
 
     const current = cards.indexOf(document.activeElement);
-    /* Column count from the actual computed layout, so it stays correct at
-       every breakpoint without hardcoding. */
+    /* Column count read from the computed layout, so it stays correct at
+       every width without hardcoding a breakpoint. */
     const columns = Math.max(
       1,
       getComputedStyle(grid).gridTemplateColumns.split(" ").filter(Boolean).length
     );
 
-    const step = {
-      ArrowRight: 1, ArrowLeft: -1,
-      ArrowDown: columns, ArrowUp: -columns,
-    }[event.key];
+    const step = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: columns, ArrowUp: -columns }[event.key];
 
     if (step === undefined) {
       if (event.key === "Enter" || event.key === " ") {
@@ -223,32 +250,61 @@ export async function initDemo() {
     next?.focus();
   });
 
-  /* --- Lock sequence --------------------------------------------------- */
+  /* --- Panel ----------------------------------------------------------- */
 
-  function setPhase(phase, label, status) {
+  function setPhase(phase, phaseLabel, loop, status) {
     root.dataset.phase = phase;
-    if (phaseLabel) phaseLabel.textContent = label;
-    if (statusLine) statusLine.innerHTML = status;
+    panel.phase.textContent = phaseLabel;
+    panel.loop.textContent = loop;
+    panel.status.textContent = status;
+    panel.updated.textContent = clock();
+    panel.badge.hidden = phase !== "locked";
+
+    /* The app flags the targeted card in the grid too. */
+    for (const card of grid.querySelectorAll(".agent-card")) {
+      const isTarget = card.dataset.name === selected?.name;
+      if (isTarget && run) card.dataset.flag = phase === "locked" ? "locked" : "target";
+      else delete card.dataset.flag;
+    }
   }
 
   function select(agent) {
     selected = agent;
-    /* data-role on the container recolours the whole panel, which is how the
-       app makes a lock light up in the agent's own colour. */
+    /* data-role on the shell recolours the panel, chips and card accents,
+       which is how a lock lights up in the agent's own colour. */
     root.dataset.role = agent.role.toLowerCase();
 
     for (const card of grid.querySelectorAll(".agent-card")) {
       card.setAttribute("aria-selected", String(card.dataset.name === agent.name));
     }
 
-    startBtn.disabled = false;
-    if (startLabel) startLabel.textContent = run ? "Switch target" : "Start locking";
-    if (!run) {
-      setPhase("idle", "Idle", `<b>${agent.name}</b> ready. Start the loop to arm it.`);
+    panel.name.textContent = agent.name;
+    panel.role.textContent = agent.role;
+    panel.role.hidden = false;
+
+    const art = agent.portrait ?? agent.icon;
+    if (art) {
+      panel.portrait.src = art;
+      panel.portrait.hidden = false;
+      panel.art.dataset.art = "portrait";
     } else {
-      setPhase("monitoring", "Monitoring", `Re-aimed at <b>${agent.name}</b>. Watching pre-game.`);
+      panel.portrait.hidden = true;
+      panel.monogram.textContent = monogram(agent.name);
+      panel.art.dataset.art = "monogram";
+    }
+
+    panel.start.disabled = false;
+
+    if (run) {
+      panel.startLabel.textContent = "Monitoring…";
+      setPhase("monitoring", "Monitoring", "Watching pre-game", `Re-aimed at ${agent.name}.`);
+    } else {
+      panel.startLabel.textContent = "Start locking";
+      setPhase("idle", "Idle", "Standby", `${agent.name} ready. Start the loop to arm it.`);
     }
   }
+
+  /* --- Lock sequence --------------------------------------------------- */
 
   const wait = (ms, token) =>
     new Promise((resolve) => setTimeout(() => resolve(token === run), ms));
@@ -257,55 +313,51 @@ export async function initDemo() {
     if (!selected) return;
     const token = ++run;
 
-    startBtn.disabled = true;
-    stopBtn.disabled = false;
-    if (startLabel) startLabel.textContent = "Monitoring…";
+    panel.start.disabled = true;
+    panel.stop.disabled = false;
+    panel.startLabel.textContent = "Monitoring…";
 
-    setPhase("arming", "Arming", "Attaching to the local client…");
+    setPhase("arming", "Arming", "Attaching", "Attaching to the local client…");
     if (!(await wait(900, token))) return;
 
     /* Loops the way the real one does: watch, lock, hold, watch again. */
     while (token === run) {
-      setPhase("monitoring", "Monitoring", `Watching pre-game for <b>${selected.name}</b>.`);
+      setPhase("monitoring", "Monitoring", "Watching pre-game", `Waiting for pre-game as ${selected.name}.`);
       if (!(await wait(2600, token))) return;
 
-      setPhase("locked", "Locked", `Pre-game detected — <b>${selected.name}</b> locked.`);
+      setPhase("locked", "Locked", "Cooldown + monitor", `Pre-game detected — ${selected.name} locked.`);
       if (!(await wait(2800, token))) return;
 
-      setPhase("monitoring", "Monitoring", "Cooldown + monitor.");
+      setPhase("monitoring", "Monitoring", "Cooldown + monitor", "Cooling down, still monitoring.");
       if (!(await wait(1400, token))) return;
     }
   }
 
   function stop() {
     run = 0;
-    stopBtn.disabled = true;
-    startBtn.disabled = !selected;
-    if (startLabel) startLabel.textContent = "Start locking";
-    setPhase("idle", "Idle", selected ? `Stopped. <b>${selected.name}</b> still selected.` : "Stopped.");
+    panel.stop.disabled = true;
+    panel.start.disabled = !selected;
+    panel.startLabel.textContent = "Start locking";
+    setPhase(
+      "idle",
+      "Idle",
+      "Stopped",
+      selected ? `Stopped. ${selected.name} still selected.` : "Stopped."
+    );
   }
 
-  startBtn?.addEventListener("click", () => {
-    /* While running, Start acts as "switch target" and the loop keeps going. */
-    if (run) return;
-    start();
+  /* While running, Start is inert — the app re-aims by picking another card. */
+  panel.start?.addEventListener("click", () => {
+    if (!run) start();
   });
-  stopBtn?.addEventListener("click", stop);
+  panel.stop?.addEventListener("click", stop);
 
   /* --- Boot ------------------------------------------------------------ */
 
   ({ agents, live } = await loadAgents());
   render();
 
-  if (!live) {
-    const note = root.querySelector(".demo-note");
-    if (note) {
-      const pill = document.createElement("span");
-      pill.className = "pill";
-      pill.textContent = "Portraits unavailable";
-      note.prepend(pill);
-    }
-  }
+  if (!live && notice) notice.hidden = false;
 
-  setPhase("idle", "Idle", "Pick an agent to arm the loop.");
+  setPhase("idle", "Idle", "Standby", "Pick an agent to arm the loop.");
 }

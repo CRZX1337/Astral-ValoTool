@@ -394,7 +394,9 @@
       color-mix(in srgb, var(--phase, var(--brand)) 42%, transparent),
       transparent 42%
     );
-    animation: radar 3.4s linear infinite;
+    /* `spin`, not `radar`: this one rotates a conic wedge, while `radar` is
+       the app's expanding ring used by the demo replica. */
+    animation: spin 3.4s linear infinite;
   }
 
   .hero-radar img {
@@ -774,160 +776,405 @@
   }
 
   /* 6. Demo ============================================================== */
-
-  .demo-frame {
-    padding: clamp(0.85rem, 2vw, 1.35rem);
-    overflow: hidden;
-  }
+  /* A replica of the desktop app. Every value below is lifted from
+     wwwroot/styles.css so the preview matches the real UI 1:1. The rep-
+     prefix keeps it from colliding with the marketing site's own components.
+     If the app's styling changes, this is the block to re-sync. */
 
   .demo-note {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 0.5rem 0.75rem;
-    margin-bottom: 1rem;
+    max-width: 52rem;
+    margin-bottom: 1.1rem;
     color: var(--text-dim);
-    font-size: 0.8rem;
+    font-size: 0.84rem;
   }
 
-  .demo-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.6rem;
-    margin-bottom: 1rem;
+  /* Mirrors .glass in the app. */
+  .rep-glass {
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    -webkit-backdrop-filter: var(--blur);
+    backdrop-filter: var(--blur);
+    box-shadow: var(--shadow);
   }
 
-  .demo-search {
+  /* Mirrors .app: topbar spanning both columns, then grid + panel. */
+  .rep {
     position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) clamp(258px, 25%, 320px);
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 12px;
+    /* The app is a 1000x550 window; this keeps the same proportions without
+       hijacking the page's own scrolling. */
+    height: clamp(30rem, 64vh, 36rem);
+    padding: 12px;
+    border: 1px solid var(--hairline);
+    border-radius: 26px;
+    background: linear-gradient(180deg, var(--bg-0), var(--bg-1) 60%, var(--bg-2));
+    box-shadow: var(--shadow-lg);
+    font-size: 15px;
+    overflow: hidden;
+  }
+
+  /* Ambient wash behind the replica, as in the app shell. */
+  .rep::before {
+    content: "";
+    position: absolute;
+    inset: -20%;
+    z-index: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(48% 46% at 22% 12%, var(--ambient-a), transparent 68%),
+      radial-gradient(42% 52% at 88% 34%, var(--ambient-b), transparent 70%);
+    animation: drift 22s ease-in-out infinite alternate;
+  }
+
+  .rep > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* --- Topbar --- */
+
+  .rep-topbar {
+    grid-column: 1 / -1;
     display: flex;
     align-items: center;
-    flex: 1 1 12rem;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 54px;
+    padding: 0 14px;
+    border-radius: 16px;
+  }
+
+  .rep-brand {
+    display: flex;
+    align-items: center;
+    gap: 11px;
     min-width: 0;
-    gap: 0.5rem;
-    padding: 0.5rem 0.75rem;
+  }
+
+  .rep-brand-mark {
+    width: 34px;
+    height: 34px;
+    object-fit: contain;
+    filter: drop-shadow(0 0 10px var(--accent-glow));
+    transition: filter 400ms var(--ease);
+  }
+
+  .rep-brand-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    line-height: 1.1;
+  }
+
+  .rep-brand-text strong {
+    color: var(--text-dim);
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+  }
+
+  .rep-brand-text > span {
+    font-size: 0.98rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  .rep-topbar-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .rep-notice-pill {
+    padding: 5px 10px;
+    border: 1px solid rgba(245, 196, 81, 0.26);
+    border-radius: 999px;
+    background: rgba(245, 196, 81, 0.10);
+    color: #f5c451;
+    font-size: 0.72rem;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+
+  .rep-phase-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    min-height: 32px;
+    padding: 0 13px 0 11px;
     border: 1px solid var(--hairline);
     border-radius: 999px;
+    background: var(--surface-raised);
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+  }
+
+  .rep-phase-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--phase);
+    box-shadow: 0 0 10px var(--phase-soft);
+    transition: background 300ms var(--ease);
+  }
+
+  .rep[data-phase="monitoring"] .rep-phase-dot,
+  .rep[data-phase="locked"] .rep-phase-dot {
+    animation: pulse-ring 1.8s var(--ease) infinite;
+  }
+
+  .rep[data-phase="arming"] .rep-phase-dot {
+    animation: blink 900ms steps(2, jump-none) infinite;
+  }
+
+  .rep-icon-btn {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--hairline);
+    border-radius: 10px;
     background: rgba(255, 255, 255, 0.045);
+    color: var(--text-dim);
   }
 
-  .demo-search:focus-within {
-    border-color: color-mix(in srgb, var(--brand) 45%, transparent);
+  .rep-icon-btn svg {
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
   }
 
-  .demo-search svg {
+  /* --- Toolbar --- */
+
+  .rep-browser {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .rep-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 52px;
+    padding: 8px 11px;
+    border-radius: 16px;
+  }
+
+  .rep-search {
+    display: flex;
+    align-items: center;
+    flex: 0 1 196px;
+    gap: 8px;
+    min-width: 118px;
+    height: 36px;
+    padding: 0 9px 0 11px;
+    border: 1px solid var(--hairline);
+    border-radius: 11px;
+    background: rgba(255, 255, 255, 0.05);
+    transition: border-color 160ms var(--ease), box-shadow 160ms var(--ease);
+  }
+
+  .rep-search:focus-within {
+    border-color: var(--hairline-strong);
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.05);
+  }
+
+  .rep-search-icon {
     flex: none;
-    width: 15px;
-    height: 15px;
+    width: 16px;
+    height: 16px;
     fill: none;
     stroke: var(--text-dim);
-    stroke-width: 1.8;
+    stroke-width: 1.7;
     stroke-linecap: round;
   }
 
-  .demo-search input {
+  .rep-search input {
     flex: 1;
     min-width: 0;
     border: 0;
+    outline: 0;
     background: none;
-    font-size: 0.9rem;
-    outline: none;
+    color: var(--text);
+    font-size: 0.88rem;
   }
 
-  .demo-search input::-webkit-search-cancel-button {
+  .rep-search input::placeholder {
+    color: var(--text-dim);
+  }
+
+  .rep-search input::-webkit-search-cancel-button {
     display: none;
   }
 
-  .demo-filters {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-  }
-
-  .chip {
-    padding: 0.4rem 0.8rem;
+  .rep-search-key {
+    flex: none;
+    min-width: 0;
+    padding: 1px 6px;
     border: 1px solid var(--hairline);
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.035);
-    color: var(--text-muted);
-    font-size: 0.8rem;
-    font-weight: 600;
-    transition: color 200ms var(--ease), border-color 200ms var(--ease),
-      background 200ms var(--ease);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.04);
+    box-shadow: none;
+    color: var(--text-dim);
+    font-family: var(--font);
+    font-size: 0.68rem;
+    line-height: 1.5;
   }
 
-  .chip:hover {
+  /* Scrolls rather than wraps, exactly as the app does in its short window. */
+  .rep-filters {
+    display: flex;
+    flex: 1 1 auto;
+    gap: 5px;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 18px), transparent);
+    mask-image: linear-gradient(90deg, #000 calc(100% - 18px), transparent);
+  }
+
+  .rep-filters::-webkit-scrollbar {
+    display: none;
+  }
+
+  .rep-chip {
+    flex: none;
+    height: 30px;
+    padding: 0 10px;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.045);
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 500;
+    white-space: nowrap;
+    transition: background 150ms var(--ease), color 150ms var(--ease),
+      border-color 150ms var(--ease);
+  }
+
+  .rep-chip:hover {
+    background: rgba(255, 255, 255, 0.09);
     color: var(--text);
   }
 
-  .chip[aria-pressed="true"] {
-    border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  .rep-chip[aria-pressed="true"] {
+    border-color: var(--accent-glow);
     background: var(--accent-soft);
-    color: color-mix(in srgb, var(--accent) 85%, white);
+    color: var(--accent);
   }
 
-  .demo-count {
-    margin-left: auto;
+  .rep-count {
+    flex: none;
     color: var(--text-dim);
-    font-size: 0.78rem;
+    font-size: 0.76rem;
     font-variant-numeric: tabular-nums;
   }
 
-  .agent-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 8.5rem), 1fr));
-    gap: 0.6rem;
-    max-height: 27rem;
-    padding: 0.15rem;
+  /* --- Agent grid --- */
+
+  .rep-grid-scroll {
+    flex: 1;
+    min-height: 0;
+    padding: 2px 8px 4px 2px;
     overflow-y: auto;
     overscroll-behavior: contain;
   }
 
+  .agent-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 122px), 1fr));
+    gap: 10px;
+  }
+
   .agent-card {
     position: relative;
-    display: grid;
-    gap: 0.5rem;
-    padding: 0.55rem;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    padding: 9px 9px 10px;
     border: 1px solid var(--hairline);
-    border-radius: var(--radius);
-    background: rgba(255, 255, 255, 0.03);
+    border-radius: 15px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.015));
+    color: var(--text);
     text-align: left;
-    transition: border-color 220ms var(--ease), background 220ms var(--ease),
-      transform 300ms var(--ease-out);
+    overflow: hidden;
+    transition: transform 170ms var(--ease), border-color 170ms var(--ease),
+      box-shadow 170ms var(--ease);
+  }
+
+  /* Per-agent tint from the valorant-api gradient. */
+  .agent-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(115% 75% at 50% 0%, var(--card-tint, transparent), transparent 72%);
+    opacity: 0.3;
+    transition: opacity 170ms var(--ease);
   }
 
   .agent-card:hover {
-    border-color: color-mix(in srgb, var(--accent) 40%, transparent);
-    background: var(--accent-soft);
-    transform: translateY(-3px);
+    border-color: var(--accent-glow);
+    box-shadow: 0 12px 26px rgba(0, 0, 0, 0.42);
+    transform: translateY(-2px);
+  }
+
+  .agent-card:hover::before {
+    opacity: 0.6;
   }
 
   .agent-card[aria-selected="true"] {
     border-color: var(--accent);
-    background: var(--accent-soft);
-    box-shadow: 0 0 0 1px var(--accent),
-      0 12px 30px -14px var(--accent-glow);
+    box-shadow: 0 0 0 1px var(--accent-glow), 0 14px 30px rgba(0, 0, 0, 0.5);
+  }
+
+  .agent-card[aria-selected="true"]::before {
+    opacity: 0.85;
+  }
+
+  .agent-card:active {
+    transform: translateY(0);
   }
 
   .agent-art {
     position: relative;
     display: grid;
-    place-items: center;
-    aspect-ratio: 1;
+    width: 100%;
+    height: 62px;
+    border-radius: 10px;
+    background: linear-gradient(165deg, var(--accent-soft), rgba(255, 255, 255, 0.02));
     overflow: hidden;
-    border-radius: 11px;
-    background:
-      radial-gradient(circle at 50% 18%, var(--accent-soft), transparent 72%),
-      rgba(0, 0, 0, 0.25);
+    transition: transform 220ms var(--ease);
+  }
+
+  .agent-art > * {
+    grid-area: 1 / 1;
+  }
+
+  .agent-card:hover .agent-art {
+    transform: scale(1.06);
   }
 
   .agent-art img {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    object-position: top center;
+    object-position: 50% 14%;
     opacity: 0;
-    transition: opacity 420ms var(--ease);
+    transition: opacity 240ms var(--ease);
   }
 
   .agent-art img.is-loaded {
@@ -935,85 +1182,368 @@
   }
 
   .agent-monogram {
-    position: absolute;
-    color: color-mix(in srgb, var(--accent) 70%, white);
-    font-size: 1.5rem;
+    place-self: center;
+    color: var(--accent);
+    font-size: 1.05rem;
     font-weight: 700;
-    letter-spacing: -0.04em;
+    letter-spacing: 0.06em;
   }
 
   .agent-art:has(img.is-loaded) .agent-monogram {
-    opacity: 0;
+    display: none;
+  }
+
+  .agent-body {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
   }
 
   .agent-name {
-    display: block;
     overflow: hidden;
-    font-size: 0.86rem;
-    font-weight: 650;
-    letter-spacing: -0.02em;
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .agent-role {
-    display: block;
-    color: var(--accent);
-    font-size: 0.72rem;
-    font-weight: 600;
-    letter-spacing: 0.04em;
+    color: var(--text-dim);
+    font-size: 0.64rem;
+    font-weight: 500;
+    letter-spacing: 0.11em;
     text-transform: uppercase;
+    transition: color 170ms var(--ease);
+  }
+
+  .agent-card[aria-selected="true"] .agent-role {
+    color: var(--accent);
+  }
+
+  .agent-flag {
+    position: absolute;
+    top: 9px;
+    right: 9px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--phase);
+    box-shadow: 0 0 0 3px rgba(7, 8, 11, 0.75), 0 0 10px var(--phase-soft);
+    opacity: 0;
+    transform: scale(0.4);
+    transition: opacity 200ms var(--ease), transform 200ms var(--ease);
+  }
+
+  .agent-card[data-flag="target"] .agent-flag,
+  .agent-card[data-flag="locked"] .agent-flag {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  .agent-card[data-flag="locked"] .agent-flag {
+    animation: pulse-ring 1.8s var(--ease) infinite;
   }
 
   .agent-skeleton {
-    aspect-ratio: 0.78;
-    border-radius: var(--radius);
+    height: 118px;
+    border: 1px solid var(--hairline);
+    border-radius: 15px;
     background: linear-gradient(
         100deg,
-        rgba(255, 255, 255, 0.03) 30%,
-        rgba(255, 255, 255, 0.08) 50%,
-        rgba(255, 255, 255, 0.03) 70%
+        rgba(255, 255, 255, 0.03) 28%,
+        rgba(255, 255, 255, 0.075) 48%,
+        rgba(255, 255, 255, 0.03) 68%
       )
-      0 0 / 200% 100%;
-    animation: shimmer 1.5s linear infinite;
+      0 0 / 240% 100%;
+    animation: shimmer 1.4s linear infinite;
   }
 
-  .demo-panel {
+  .rep-grid-empty {
     display: grid;
-    gap: 0.9rem;
-    margin-top: 1rem;
-    padding-top: 1rem;
+    place-items: center;
+    min-height: 140px;
+    padding: 20px;
+    border: 1px dashed var(--hairline);
+    border-radius: 15px;
+    color: var(--text-dim);
+    font-size: 0.86rem;
+    text-align: center;
+  }
+
+  /* --- Control panel --- */
+
+  .rep-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+    min-height: 0;
+    padding: 14px;
+    border-radius: 20px;
+    overflow-y: auto;
+    transition: border-color 300ms var(--ease), box-shadow 300ms var(--ease);
+  }
+
+  .rep[data-phase="locked"] .rep-panel {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent-glow), 0 18px 60px var(--accent-glow);
+  }
+
+  .rep[data-phase="arming"] .rep-panel {
+    animation: breathe 1.7s ease-in-out infinite;
+  }
+
+  .rep-hero-art {
+    position: relative;
+    display: grid;
+    flex: 0 1 auto;
+    height: clamp(112px, 19vh, 180px);
+    min-height: 72px;
+    border: 1px solid var(--hairline);
+    border-radius: 16px;
+    background: linear-gradient(165deg, var(--accent-soft), rgba(255, 255, 255, 0.02));
+    overflow: hidden;
+  }
+
+  .rep-hero-art > * {
+    grid-area: 1 / 1;
+  }
+
+  .rep-hero-art::after {
+    content: "";
+    grid-area: 1 / 1;
+    background: linear-gradient(180deg, transparent 42%, rgba(7, 8, 11, 0.82));
+    pointer-events: none;
+  }
+
+  .rep-hero-portrait {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: 50% 8%;
+    opacity: 0;
+    transition: opacity 260ms var(--ease);
+  }
+
+  .rep-hero-art[data-art="portrait"] .rep-hero-portrait {
+    opacity: 1;
+  }
+
+  .rep-hero-watermark {
+    place-self: center;
+    width: 46%;
+    max-width: 96px;
+    opacity: 0.18;
+  }
+
+  .rep-hero-monogram {
+    place-self: center;
+    color: var(--accent);
+    font-size: 2.4rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+  }
+
+  .rep-hero-art[data-art="portrait"] .rep-hero-monogram,
+  .rep-hero-art[data-art="portrait"] .rep-hero-watermark,
+  .rep-hero-art[data-art="monogram"] .rep-hero-watermark {
+    display: none;
+  }
+
+  /* Radar sweep while the loop is watching pre-game. */
+  .rep[data-phase="monitoring"] .rep-hero-art::before {
+    content: "";
+    grid-area: 1 / 1;
+    place-self: center;
+    z-index: 1;
+    width: 56px;
+    height: 56px;
+    border: 1px solid var(--phase);
+    border-radius: 50%;
+    animation: radar 2.2s var(--ease) infinite;
+    pointer-events: none;
+  }
+
+  .rep-hero-badge {
+    place-self: end start;
+    z-index: 2;
+    margin: 10px;
+    padding: 4px 10px;
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    /* Opaque backing rather than relying on blur, as in the app. */
+    background: linear-gradient(var(--accent-soft), var(--accent-soft)), rgba(7, 8, 11, 0.62);
+    color: var(--accent);
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .rep-identity {
+    min-width: 0;
+  }
+
+  .rep-eyebrow {
+    display: block;
+    margin: 0;
+    color: var(--text-dim);
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+
+  .rep-eyebrow::before {
+    content: none;
+  }
+
+  .rep-name {
+    margin-top: 3px;
+    font-size: clamp(1.3rem, 2.4vw, 1.65rem);
+    font-weight: 700;
+    line-height: 1.05;
+    letter-spacing: -0.035em;
+    overflow-wrap: anywhere;
+  }
+
+  .rep-role-chip {
+    display: inline-flex;
+    align-items: center;
+    height: 22px;
+    margin-top: 7px;
+    padding: 0 9px;
+    border: 1px solid var(--accent-glow);
+    border-radius: 7px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 0.66rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .rep-status {
+    padding: 11px 12px;
+    border: 1px solid var(--hairline);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.035);
+  }
+
+  .rep-status-line {
+    font-size: 0.88rem;
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+  }
+
+  .rep-meta {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 10px;
+    padding-top: 9px;
     border-top: 1px solid var(--hairline);
   }
 
-  .demo-status {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.75rem;
-  }
-
-  .demo-status-text {
-    color: var(--text-muted);
-    font-size: 0.88rem;
-  }
-
-  .demo-status-text b {
-    color: var(--text);
-    font-weight: 650;
-  }
-
-  .demo-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.6rem;
-  }
-
-  .demo-empty {
-    padding: 2rem 1rem;
+  .rep-meta dt {
     color: var(--text-dim);
-    font-size: 0.9rem;
-    text-align: center;
+    font-size: 0.6rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .rep-meta dd {
+    margin-top: 3px;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .rep-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: auto;
+    padding-top: 4px;
+  }
+
+  .rep-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    min-height: 46px;
+    padding: 0 16px;
+    border: 1px solid transparent;
+    border-radius: 13px;
+    font-size: 0.92rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    transition: transform 150ms var(--ease), background 150ms var(--ease),
+      border-color 150ms var(--ease), box-shadow 150ms var(--ease),
+      opacity 150ms var(--ease);
+  }
+
+  .rep-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+  }
+
+  .rep-btn:active:not(:disabled) {
+    transform: translateY(0);
+  }
+
+  .rep-btn:disabled {
+    opacity: 0.38;
+    cursor: not-allowed;
+  }
+
+  .rep-btn-primary {
+    background: linear-gradient(180deg, #ffffff, #dcdfe8);
+    box-shadow: 0 10px 26px var(--accent-glow);
+    color: #08090b;
+  }
+
+  .rep-btn-primary:hover:not(:disabled) {
+    box-shadow: 0 14px 32px var(--accent-glow);
+  }
+
+  .rep-btn-ghost {
+    border-color: var(--hairline);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text);
+  }
+
+  .rep-btn-ghost:hover:not(:disabled) {
+    border-color: rgba(255, 90, 104, 0.35);
+    background: var(--bad-soft);
+    color: #ff929b;
+  }
+
+  /* The app is a resizable desktop window and never has to do this; on a
+     phone the panel moves under the grid instead of beside it. */
+  @media (max-width: 760px) {
+    .rep {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: auto minmax(12rem, 1fr) auto;
+      height: auto;
+      max-height: none;
+    }
+
+    .rep-grid-scroll {
+      max-height: 20rem;
+    }
+
+    .rep-hero-art {
+      height: 128px;
+    }
+
+    .rep-name {
+      font-size: 1.35rem;
+    }
   }
 
   /* 7. Screenshots ======================================================= */
