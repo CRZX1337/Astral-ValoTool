@@ -382,15 +382,17 @@
         <p class="eyebrow">Interactive preview</p>
         <h2 id="demo-title">The agent grid, running right here.</h2>
         <p class="lede">
-          A working replica of Astral's picker, with live portraits pulled from valorant-api.com.
-          Search, filter by role, pick a target and run the lock sequence.
+          The whole desktop UI, rebuilt and running here. Search, filter by role, pick a target and
+          arm the loop — then open Settings and it all works: timing sliders, per-map overrides,
+          the lot. Your settings persist and actually drive the loop.
         </p>
       </div>
 
       <p class="demo-note reveal">
         <span class="pill">Preview</span>
-        <span>A faithful rebuild of the desktop UI. Simulated — it isn't talking to a game
-        client; the real app runs this against your local Valorant.</span>
+        <span>Simulated — there is no game client in a browser tab, so pre-game is faked on a map
+        rotation. Everything else is the real interface, and the phases, labels and status lines are
+        the ones the app reports.</span>
       </p>
 
       <!-- Replica of the app shell. Class names are prefixed rep- so they can
@@ -414,9 +416,9 @@
               <span class="rep-phase-dot" aria-hidden="true"></span>
               <span id="demo-phase">Idle</span>
             </span>
-            <span class="rep-icon-btn" aria-hidden="true">
-              <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54A.48.48 0 0 0 13.9 2h-3.8a.48.48 0 0 0-.47.41l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.47a.48.48 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.8c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/></svg>
-            </span>
+            <button class="rep-icon-btn" type="button" id="demo-settings-open" aria-label="Settings" aria-haspopup="dialog">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54A.48.48 0 0 0 13.9 2h-3.8a.48.48 0 0 0-.47.41l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.47a.48.48 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.8c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/></svg>
+            </button>
           </div>
         </header>
 
@@ -476,6 +478,77 @@
             <button class="rep-btn rep-btn-ghost" type="button" id="demo-stop" disabled>Stop</button>
           </div>
         </aside>
+
+        <!-- Settings dialog, mirroring the app's. Scoped inside .rep so it
+             covers the replica rather than the page. -->
+        <div class="rep-modal" id="demo-settings" hidden>
+          <div class="rep-modal-backdrop" data-close-settings></div>
+
+          <div class="rep-modal-panel rep-glass" role="dialog" aria-modal="true" aria-labelledby="demo-settings-title">
+            <header class="rep-modal-head">
+              <h3 class="rep-modal-title" id="demo-settings-title">Settings</h3>
+              <button class="rep-icon-btn" type="button" data-close-settings aria-label="Close settings">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.3 5.71 12 12.01l-6.3-6.3-1.41 1.41 6.3 6.3-6.3 6.3 1.41 1.41 6.3-6.3 6.3 6.3 1.41-1.41-6.3-6.3 6.3-6.3z"/></svg>
+              </button>
+            </header>
+
+            <div class="rep-modal-body">
+              <section class="rep-setting-group">
+                <h4 class="rep-setting-title">Timing</h4>
+                <p class="rep-setting-hint">How long to wait around the select and lock calls. Zero is as fast as the client allows.</p>
+
+                <div class="rep-slider-row">
+                  <span class="rep-slider-label">
+                    <label for="set-hover">Hover delay</label>
+                    <button class="rep-tip" type="button" aria-label="About hover delay"
+                            data-tip="Pause between pre-game opening and your agent being hovered. Everything after it is delayed too, so this is the one that can cost you a contested pick.">?</button>
+                  </span>
+                  <input class="rep-slider" id="set-hover" type="range" min="0" max="10000" step="50" value="0">
+                  <input class="rep-slider-value" id="set-hover-value" type="number" min="0" max="10000" step="50" value="0" aria-label="Hover delay in milliseconds">
+                  <span class="rep-slider-unit">ms</span>
+                </div>
+
+                <div class="rep-slider-row">
+                  <span class="rep-slider-label">
+                    <label for="set-lock">Lock delay</label>
+                    <button class="rep-tip" type="button" aria-label="About lock delay"
+                            data-tip="Pause between hovering and locking. Your hover is already visible to the lobby during this window, so anyone can still take the agent first.">?</button>
+                  </span>
+                  <input class="rep-slider" id="set-lock" type="range" min="0" max="10000" step="50" value="0">
+                  <input class="rep-slider-value" id="set-lock-value" type="number" min="0" max="10000" step="50" value="0" aria-label="Lock delay in milliseconds">
+                  <span class="rep-slider-unit">ms</span>
+                </div>
+              </section>
+
+              <section class="rep-setting-group">
+                <h4 class="rep-setting-title">Map overrides</h4>
+                <p class="rep-setting-hint">Lock a different agent when pre-game opens on a specific map. Every other map uses the agent picked in the grid.</p>
+
+                <div class="rep-rule-list" id="set-rules"></div>
+                <p class="rep-rule-empty" id="set-rules-empty">No overrides yet.</p>
+
+                <button class="rep-btn-quiet" type="button" id="set-add">+ Add rule</button>
+              </section>
+
+              <section class="rep-setting-group">
+                <h4 class="rep-setting-title">After a lock</h4>
+                <p class="rep-setting-hint">How long the Locked confirmation stays on screen before monitoring resumes. This runs once the lock has already succeeded, so it cannot influence the pick.</p>
+
+                <div class="rep-slider-row">
+                  <span class="rep-slider-label"><label for="set-post">Show Locked for</label></span>
+                  <input class="rep-slider" id="set-post" type="range" min="0" max="10000" step="50" value="5000">
+                  <input class="rep-slider-value" id="set-post-value" type="number" min="0" max="10000" step="50" value="5000" aria-label="Show the Locked state for this many milliseconds">
+                  <span class="rep-slider-unit">ms</span>
+                </div>
+              </section>
+            </div>
+
+            <footer class="rep-modal-foot">
+              <p class="rep-save-note" id="set-note" role="status"></p>
+              <button class="rep-btn rep-btn-primary rep-btn-compact" type="button" id="set-save">Save</button>
+            </footer>
+          </div>
+        </div>
       </div>
     </div>
   </section>
@@ -852,6 +925,17 @@ cd Astral-ValoTool</code></pre>
   </button>
   <img id="lightbox-img" src="" alt="">
 </dialog>
+
+<template id="rule-row-template">
+  <div class="rep-rule-row">
+    <select class="rep-rule-map" aria-label="Map"></select>
+    <span class="rep-rule-arrow" aria-hidden="true">→</span>
+    <select class="rep-rule-agent" aria-label="Agent"></select>
+    <button class="rep-icon-btn rep-rule-remove" type="button" aria-label="Remove rule">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.3 5.71 12 12.01l-6.3-6.3-1.41 1.41 6.3 6.3-6.3 6.3 1.41 1.41 6.3-6.3 6.3 6.3 1.41-1.41-6.3-6.3 6.3-6.3z"/></svg>
+    </button>
+  </div>
+</template>
 
 <template id="agent-card-template">
   <button class="agent-card" type="button" role="option" aria-selected="false">

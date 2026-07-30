@@ -5,7 +5,16 @@
    browser tab) but every phase, loop label and status string below is one the
    app actually reports, so what you see here is what you get. */
 
+import { loadConfig, initSettings } from "./settings.js";
+
 const API = "https://valorant-api.com/v1/agents?isPlayableCharacter=true";
+
+/* Maps the simulated pre-game can open on. Drawn from the same table the
+   settings dialog offers, minus the two non-competitive ones. */
+const ROTATION = [
+  "Ascent", "Bind", "Haven", "Split", "Lotus", "Sunset",
+  "Icebox", "Breeze", "Fracture", "Pearl", "Abyss", "Corrode",
+];
 const CACHE_KEY = "astral:agents";
 const TIMEOUT = 4000;
 
@@ -133,6 +142,10 @@ export async function initDemo() {
   let query = "";
   let selected = null;
   let run = 0; // increments to invalidate a running sequence
+
+  /* Persisted timing and map overrides, standing in for the app's
+     %APPDATA%\Astral\settings.json. */
+  const config = loadConfig();
 
   /* --- Filters --------------------------------------------------------- */
 
@@ -309,6 +322,18 @@ export async function initDemo() {
   const wait = (ms, token) =>
     new Promise((resolve) => setTimeout(() => resolve(token === run), ms));
 
+  /* Walk the rotation, but put any map that has an override next in line so a
+     saved rule visibly fires instead of waiting on chance. */
+  let cycle = 0;
+  function nextMap() {
+    const configured = Object.keys(config.mapAgentOverrides);
+    if (!configured.length) return ROTATION[cycle++ % ROTATION.length];
+
+    const others = ROTATION.filter((map) => !configured.includes(map));
+    const pool = configured.flatMap((map, i) => [map, others[i % others.length]]);
+    return pool[cycle++ % pool.length];
+  }
+
   async function start() {
     if (!selected) return;
     const token = ++run;
@@ -320,16 +345,27 @@ export async function initDemo() {
     setPhase("arming", "Arming", "Attaching", "Attaching to the local client…");
     if (!(await wait(900, token))) return;
 
-    /* Loops the way the real one does: watch, lock, hold, watch again. */
+    /* Same shape as the real loop: watch, resolve the map, hover, lock, hold.
+       Every delay below is whatever is currently saved in Settings. */
     while (token === run) {
-      setPhase("monitoring", "Monitoring", "Watching pre-game", `Waiting for pre-game as ${selected.name}.`);
+      setPhase("monitoring", "Monitoring", "Watching pre-game", "Waiting for pre-game.");
       if (!(await wait(2600, token))) return;
 
-      setPhase("locked", "Locked", "Cooldown + monitor", `Pre-game detected — ${selected.name} locked.`);
-      if (!(await wait(2800, token))) return;
+      const map = nextMap();
+      /* A per-map override wins over the agent picked in the grid, exactly as
+         InstalockerService.ResolveAgentForMap does. */
+      const agent = config.mapAgentOverrides[map] ?? selected.name;
 
-      setPhase("monitoring", "Monitoring", "Cooldown + monitor", "Cooling down, still monitoring.");
-      if (!(await wait(1400, token))) return;
+      if (config.hoverDelayMs) {
+        setPhase("monitoring", "Monitoring", "Watching pre-game", `Pre-game on ${map}. Waiting ${config.hoverDelayMs} ms…`);
+        if (!(await wait(Math.min(config.hoverDelayMs, 4000), token))) return;
+      }
+
+      setPhase("monitoring", "Monitoring", "Watching pre-game", `Selecting ${agent} on ${map}.`);
+      if (!(await wait(Math.max(Math.min(config.lockDelayMs, 4000), 420), token))) return;
+
+      setPhase("locked", "Locked", "Cooldown + monitor", `Locked ${agent}. Monitoring for the next match.`);
+      if (!(await wait(Math.max(Math.min(config.postLockDelayMs, 5000), 600), token))) return;
     }
   }
 
@@ -358,6 +394,25 @@ export async function initDemo() {
   render();
 
   if (!live && notice) notice.hidden = false;
+
+  /* Wired only once the roster is known, so the override rows can offer real
+     agent names rather than an empty list. */
+  initSettings({
+    config,
+    agentNames: agents.map((agent) => agent.name),
+    onSave: () => {
+      const rules = Object.keys(config.mapAgentOverrides).length;
+      if (run) return; // a running loop picks the new values up next cycle
+      setPhase(
+        root.dataset.phase,
+        panel.phase.textContent,
+        panel.loop.textContent,
+        rules
+          ? `Settings saved. ${rules} map override${rules > 1 ? "s" : ""} active.`
+          : "Settings saved."
+      );
+    },
+  });
 
   setPhase("idle", "Idle", "Standby", "Pick an agent to arm the loop.");
 }
