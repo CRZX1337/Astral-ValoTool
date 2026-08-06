@@ -19,6 +19,11 @@
 
   /* 1. Buttons =========================================================== */
 
+  /* No backdrop-filter on the controls, deliberately -- see the note in
+     wwwroot/css/controls.css. They sit on a surface that is already blurring,
+     so their own blur re-samples an already-blurred backdrop, and the nesting
+     is what made the window hitch when a view transition tore down. The rim,
+     gradient and shadow are what sell these as glass, and those stay. */
   .btn,
   .rep-btn,
   .rep-btn-quiet,
@@ -29,8 +34,6 @@
     position: relative;
     isolation: isolate;
     overflow: hidden;
-    -webkit-backdrop-filter: blur(14px) saturate(180%);
-    backdrop-filter: blur(14px) saturate(180%);
     transition:
       transform 520ms var(--spring),
       box-shadow 320ms var(--spring-soft),
@@ -144,11 +147,13 @@
       0 6px 18px rgba(0, 0, 0, 0.3);
   }
 
+  /* A top-lit gradient in place of the blur -- see the app's controls.css. */
   .rep-btn-quiet,
   .rep-back,
   .rep-chip,
   .rep-queue-chip {
     border-radius: 999px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.03));
     box-shadow:
       inset 0 1px 0 var(--lg-rim-soft),
       0 3px 10px rgba(0, 0, 0, 0.22);
@@ -385,19 +390,6 @@
     }
   }
 
-  @media (prefers-reduced-transparency: reduce) {
-    .btn,
-    .rep-btn,
-    .rep-btn-quiet,
-    .rep-icon-btn,
-    .rep-back,
-    .rep-chip,
-    .rep-queue-chip {
-      -webkit-backdrop-filter: none;
-      backdrop-filter: none;
-    }
-  }
-
   @media (forced-colors: active) {
     .btn::after,
     .rep-btn::after,
@@ -415,8 +407,6 @@
     .rep-back,
     .rep-chip,
     .rep-queue-chip {
-      -webkit-backdrop-filter: none;
-      backdrop-filter: none;
       box-shadow: none;
     }
   }

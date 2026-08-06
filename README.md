@@ -24,7 +24,7 @@ It's one C# app: an embedded ASP.NET Core Web API behind a native WebView2 windo
 |---|---|
 | **Instalock** | Detects pre-game and locks your agent, with per-map overrides and adjustable timing |
 | **Rank tracker** | Current rank and RR, session wins/losses and net RR, and per-match RR deltas |
-| **Auto-queue** | Requeues after a match, confirms the party ready check, and picks the queue |
+| **Auto-queue** | Requeues after a match and picks the queue |
 
 ---
 

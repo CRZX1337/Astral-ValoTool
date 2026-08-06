@@ -7,6 +7,7 @@ import { startStateFeed } from "./poller.js";
 import { getState, loadAgents, loadQueue, loadQueueOptions, loadTracker, subscribe } from "./store.js";
 import { mountAgentGrid } from "./ui/agent-grid.js";
 import { mountAutoQueue } from "./ui/autoqueue.js";
+import { mountBoot } from "./ui/boot.js";
 import { mountControlPanel } from "./ui/control-panel.js";
 import { mountControls } from "./ui/controls.js";
 import { mountHeader } from "./ui/header.js";
@@ -23,6 +24,7 @@ import { mountTracker } from "./ui/tracker.js";
 document.addEventListener("contextmenu", (event) => event.preventDefault());
 
 const views = [
+  mountBoot(),
   mountShell(),
   mountHeader(),
   mountAgentGrid(),

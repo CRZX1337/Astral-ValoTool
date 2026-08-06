@@ -11,8 +11,7 @@ using PartyApi = RadiantConnect.Network.PartyEndpoints.PartyEndpoints;
 namespace Astral.Services;
 
 /// <summary>
-/// Requeues after a match, confirms the party ready check, and drives the queue
-/// picker.
+/// Requeues after a match and drives the queue picker.
 ///
 /// Follows the same generation-counter shape as <see cref="InstalockerService"/>:
 /// stopping retires the running generation, so a worker still unwinding inside
@@ -233,14 +232,12 @@ public sealed class AutoQueueService : IModuleStateSource
             UpdateStatus(generation, "Watching for the end of a match.");
 
             void OnMatchEnded(string _) => signalQueue.Writer.TryWrite(Trigger.MatchEnded);
-            void OnPartyChanged(string _) => signalQueue.Writer.TryWrite(Trigger.PartyChanged);
             // The queue events are declared over a nullable string; the match and
             // party ones are not.
             void OnEnteredQueue(string? _) => signalQueue.Writer.TryWrite(Trigger.Sync);
             void OnLeftQueue(string? _) => signalQueue.Writer.TryWrite(Trigger.Sync);
 
             initiator.GameEvents.Match.OnMatchEnded += OnMatchEnded;
-            initiator.GameEvents.Party.OnChanged += OnPartyChanged;
             initiator.GameEvents.Queue.OnEnteredQueue += OnEnteredQueue;
             initiator.GameEvents.Queue.OnLeftQueue += OnLeftQueue;
 
@@ -259,7 +256,6 @@ public sealed class AutoQueueService : IModuleStateSource
             finally
             {
                 initiator.GameEvents.Match.OnMatchEnded -= OnMatchEnded;
-                initiator.GameEvents.Party.OnChanged -= OnPartyChanged;
                 initiator.GameEvents.Queue.OnEnteredQueue -= OnEnteredQueue;
                 initiator.GameEvents.Queue.OnLeftQueue -= OnLeftQueue;
             }
@@ -289,11 +285,6 @@ public sealed class AutoQueueService : IModuleStateSource
 
         Party? party = await endpoints.FetchPartyAsync().ConfigureAwait(false);
         PublishParty(generation, party, null);
-
-        if (trigger is Trigger.PartyChanged or Trigger.Sync && options.AutoReadyUp)
-        {
-            await TryReadyUpAsync(generation, lease, endpoints, party).ConfigureAwait(false);
-        }
 
         if (trigger != Trigger.MatchEnded || !options.AutoRequeue)
         {
@@ -331,30 +322,6 @@ public sealed class AutoQueueService : IModuleStateSource
         int count = Interlocked.Increment(ref _consecutiveRequeues);
         party = await endpoints.FetchPartyAsync().ConfigureAwait(false);
         PublishParty(generation, party, $"Requeued automatically ({count} of {options.MaxConsecutiveRequeues}).");
-    }
-
-    /// <summary>
-    /// Readies up only when this account is actually un-ready, so a party that
-    /// changes for any other reason does not get a redundant write every time.
-    /// </summary>
-    private async Task TryReadyUpAsync(int generation, ValorantLease lease, PartyApi endpoints, Party? party)
-    {
-        if (party is null || !IsInMenus(party))
-        {
-            return;
-        }
-
-        string puuid = lease.UserId;
-        Member? self = party.Members?.FirstOrDefault(member =>
-            string.Equals(member.Subject, puuid, StringComparison.OrdinalIgnoreCase));
-
-        if (self is null || self.IsReady == true)
-        {
-            return;
-        }
-
-        await endpoints.SetPartyReadyAsync(true).ConfigureAwait(false);
-        UpdateStatus(generation, "Readied up.");
     }
 
     private async Task ApplyPreferredQueueAsync(PartyApi endpoints, CancellationToken cancellationToken)
@@ -558,7 +525,6 @@ public sealed class AutoQueueService : IModuleStateSource
     private enum Trigger
     {
         Sync,
-        PartyChanged,
         MatchEnded
     }
 }

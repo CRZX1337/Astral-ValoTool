@@ -178,8 +178,19 @@ export async function initDemo() {
 
   let view = "home";
 
-  function setView(next) {
-    if (!views.has(next)) return;
+  const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
+
+  /* Same shared element as the app's shell.js, prefixed so the site's own
+     transitions can never collide with the replica's. */
+  const MORPH = "rep-morph";
+
+  const morphTarget = (name) => {
+    const section = views.get(name);
+    return section ? section.querySelector(".rep-tool-head, .rep-toolbar") ?? section : null;
+  };
+  const cardFor = (name) => root.querySelector(`[data-goto="${name}"]`);
+
+  function applyView(next) {
     view = next;
     root.dataset.view = next;
 
@@ -189,9 +200,60 @@ export async function initDemo() {
     brand.textContent = TITLES[next] ?? "Astral";
     /* The gear only configures the instalocker, exactly as in the app. */
     gear.hidden = next !== "instalock";
+  }
 
-    /* Opening the tracker loads it, the way the app refreshes on view entry. */
-    if (next === "tracker" && !trackerLoaded && !trackerBusy) refreshTracker();
+  function enter(next) {
+    const active = views.get(next);
+    if (!active) return;
+    active.classList.remove("is-entering");
+    void active.offsetWidth;
+    active.classList.add("is-entering");
+    setTimeout(() => active.classList.remove("is-entering"), 900);
+  }
+
+  function setView(next) {
+    if (!views.has(next) || next === view) return;
+
+    const from = view;
+    const start = document.startViewTransition?.bind(document);
+
+    if (!start || reduceMotion.matches) {
+      applyView(next);
+      enter(next);
+    } else {
+      /* One view-transition-name, handed from the card to the destination
+         header. Naming both at once silently kills the morph. */
+      const opening = next !== "home";
+      const outgoing = opening ? cardFor(next) : morphTarget(from);
+      const incoming = opening ? morphTarget(next) : cardFor(from);
+
+      if (outgoing) outgoing.style.viewTransitionName = MORPH;
+
+      const transition = start(() => {
+        if (outgoing) outgoing.style.viewTransitionName = "";
+        if (incoming) incoming.style.viewTransitionName = MORPH;
+        applyView(next);
+      });
+
+      /* Deliberately no enter() here: the transition is the entry animation,
+         and staggering the sections in again afterwards played the view twice. */
+      const cleanup = () => {
+        if (outgoing) outgoing.style.viewTransitionName = "";
+        if (incoming) incoming.style.viewTransitionName = "";
+      };
+
+      /* Both arms: `finished` rejects when a transition is skipped. */
+      transition.finished.then(cleanup, cleanup);
+    }
+
+    /* Opening the tracker loads it, the way the app refreshes on view entry --
+       but only once the view has settled, so the content cannot change
+       underneath the snapshot the user is still watching. */
+    if (next === "tracker" && !trackerLoaded && !trackerBusy) {
+      setTimeout(() => {
+        if (view === "tracker" && !trackerLoaded && !trackerBusy) refreshTracker();
+      }, 520);
+    }
   }
 
   for (const card of root.querySelectorAll("[data-goto]")) {
@@ -618,7 +680,6 @@ export async function initDemo() {
     party: document.getElementById("demo-party-state"),
     partyQueue: document.getElementById("demo-party-queue"),
     requeue: document.getElementById("demo-opt-requeue"),
-    ready: document.getElementById("demo-opt-ready"),
   };
 
   let queueId = "competitive";
@@ -712,10 +773,6 @@ export async function initDemo() {
       setQueueStatus(`Requeued automatically (${requeues} of ${limit}).`, true);
       if (!(await queueWait(1800, token))) return;
 
-      if (queue.ready.checked) {
-        setQueueStatus("Readied up.", true);
-        if (!(await queueWait(1200, token))) return;
-      }
     }
   }
 
@@ -761,5 +818,72 @@ export async function initDemo() {
   });
 
   setPhase("idle", "Idle", "Standby", "Pick an agent to arm the loop.");
-  setView("home");
+  applyView("home");
+  bootReplica();
+
+  /* ================= Boot on scroll ================= */
+
+  /* The app boots when it launches; the replica has no such moment, so it
+     boots the first time it comes into view. Same guard as js/reveal.js: the
+     effect is only armed once we know we can drive it, and a deadline tears it
+     down if the observer never reports rather than leaving the demo covered. */
+  function bootReplica() {
+    const overlay = document.getElementById("demo-boot");
+    const status = document.getElementById("demo-boot-status");
+
+    if (!overlay) {
+      root.dataset.booted = "true";
+      return;
+    }
+
+    if (reduceMotion.matches || !("IntersectionObserver" in window)) {
+      overlay.remove();
+      root.dataset.booted = "true";
+      return;
+    }
+
+    overlay.hidden = false;
+    root.dataset.booting = "true";
+
+    let finished = false;
+
+    function finish() {
+      if (finished) return;
+      finished = true;
+      overlay.classList.add("is-done");
+      delete root.dataset.booting;
+      root.dataset.booted = "true";
+      /* Removed rather than left transparent: a full-cover overlay that still
+         exists will happily swallow the first click on a tool card. */
+      setTimeout(() => overlay.remove(), 520);
+    }
+
+    function play() {
+      status.textContent = "Reading agent list…";
+      setTimeout(() => { status.textContent = "Ready"; }, 520);
+      setTimeout(finish, 1100);
+    }
+
+    let delivered = false;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        delivered = true;
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          observer.disconnect();
+          play();
+        }
+      },
+      { threshold: 0.25 }
+    );
+
+    observer.observe(root);
+
+    setTimeout(() => {
+      if (delivered) return;
+      observer.disconnect();
+      finish();
+    }, 1500);
+  }
 }

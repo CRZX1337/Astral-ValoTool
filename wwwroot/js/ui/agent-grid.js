@@ -7,6 +7,7 @@
 
 import { monogram, rgba, UNKNOWN_ROLE_LABEL } from "../roles.js";
 import { availableRoles, selectAgent, setRoleFilter, setSearch, visibleAgents } from "../store.js";
+import { stagger } from "./motion.js";
 
 const SKELETON_COUNT = 12;
 
@@ -136,11 +137,20 @@ function buildCards(agents, template, gridEl, cards) {
     }
 
     card.addEventListener("click", () => selectAgent(agent.name));
+    card.classList.add("is-new");
     cards.set(agent.name, card);
     fragment.append(card);
   }
 
+  // Indexes the entry stagger, then drops the flag so filtering later does not
+  // replay the wave every time a card is shown again.
+  stagger(cards.values());
   gridEl.append(fragment);
+  window.setTimeout(() => {
+    for (const card of cards.values()) {
+      card.classList.remove("is-new");
+    }
+  }, 1200);
 }
 
 function buildFilters(filtersEl, chips) {

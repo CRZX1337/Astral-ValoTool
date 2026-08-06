@@ -6,7 +6,6 @@ namespace Astral.Models;
 /// </summary>
 public sealed record AutoQueuePatchRequest(
     bool? AutoRequeue,
-    bool? AutoReadyUp,
     string? QueueId,
     int? RequeueDelayMs,
     int? MaxConsecutiveRequeues
@@ -18,7 +17,6 @@ public sealed record QueueingRequest(bool Queueing);
 /// <summary>Auto-queue settings plus the reference data the picker needs.</summary>
 public sealed record AutoQueueOptionsResponse(
     bool AutoRequeue,
-    bool AutoReadyUp,
     string QueueId,
     int RequeueDelayMs,
     int MaxConsecutiveRequeues,

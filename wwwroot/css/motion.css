@@ -1,0 +1,341 @@
+/* ==========================================================================
+   Shell motion — boot sequence, view transitions, entry choreography
+
+   Springs come from css/controls.css (--spring, --spring-soft, --press); this
+   file only uses them.
+
+   Stagger convention, matching the one .tool-card already used: put an index
+   in --i on the element and let the delay fall out of it. Lists set --i in JS
+   and say nothing else about timing.
+
+     1. boot overlay      4. entry choreography
+     2. assemble          5. micro-motion
+     3. view transitions  6. degradation
+   ========================================================================== */
+
+/* 1. Boot overlay ======================================================== */
+
+.boot {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(60% 50% at 50% 42%, rgba(91, 181, 255, 0.10), transparent 70%),
+    linear-gradient(180deg, var(--bg-0), var(--bg-1) 60%, #101219);
+}
+
+.boot-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.boot-mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+  animation: boot-mark-in 900ms var(--spring) both;
+}
+
+.boot-mark img {
+  width: 62px;
+  height: 62px;
+  filter: drop-shadow(0 0 18px rgba(91, 181, 255, 0.45));
+}
+
+/* The ring is a conic sweep masked to a 2px band -- the same trick the glass
+   rim uses, so the two read as the same material. */
+.boot-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    rgba(91, 181, 255, 0.05) 200deg,
+    rgba(255, 255, 255, 0.85) 330deg,
+    transparent 360deg
+  );
+  -webkit-mask:
+    radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
+  mask:
+    radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
+  animation: boot-ring-spin 1.15s linear infinite;
+}
+
+.boot-word {
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--text);
+  animation: boot-fade-up 620ms var(--ease-out) 160ms both;
+}
+
+.boot-status {
+  min-height: 1.2em;
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+  animation: boot-fade-up 620ms var(--ease-out) 260ms both;
+}
+
+/* The status line swaps between steps rather than snapping. */
+.boot-status.is-swapped {
+  animation: text-in 320ms var(--ease-out) both;
+}
+
+.boot.is-done {
+  animation: boot-out 520ms var(--spring-soft) both;
+  pointer-events: none;
+}
+
+@keyframes boot-mark-in {
+  from { opacity: 0; transform: scale(0.72); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes boot-ring-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes boot-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Lifts away rather than just fading -- the shell is arriving underneath it. */
+@keyframes boot-out {
+  from { opacity: 1; transform: scale(1); filter: blur(0); }
+  to   { opacity: 0; transform: scale(1.08); filter: blur(6px); }
+}
+
+/* 2. Assemble ============================================================ */
+
+/* Held until boot.js says the agents are in. Without this the shell would run
+   its entry animation behind the splash and be finished before it lifts.
+
+   Gated on `.boot-armed`, which boot.js adds at mount: a hold that applied
+   without the script running would leave the window permanently blank. */
+body.boot-armed:not([data-booted]) .app {
+  opacity: 0;
+}
+
+body[data-booted] .topbar {
+  animation: drop-in 620ms var(--spring) both;
+}
+
+body[data-booted] .viewport {
+  animation: boot-fade-up 640ms var(--ease-out) 90ms both;
+}
+
+body.boot-armed:not([data-booted]) .tool-card {
+  animation: none;
+  opacity: 0;
+}
+
+body[data-booted] .tool-card {
+  animation: card-in 640ms var(--spring) both;
+  animation-delay: calc(180ms + var(--i, 0) * 85ms);
+}
+
+@keyframes drop-in {
+  from { opacity: 0; transform: translateY(-14px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* 3. View transitions ==================================================== */
+
+/* The topbar is the same bar before and after, so it is pulled out of the root
+   snapshot and given its own name. Left in the root it cross-fades against
+   itself and you get two brand labels and two logos ghosting over each other. */
+.topbar {
+  view-transition-name: astral-topbar;
+}
+
+/* Root carries only the viewport. The outgoing half leaves quickly and the
+   incoming half starts after it, so the two are never both at half opacity --
+   that overlap is what reads as "everything is on screen twice". */
+::view-transition-old(root) {
+  animation: vt-out 160ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+::view-transition-new(root) {
+  animation: vt-in 260ms cubic-bezier(0, 0, 0.2, 1) 110ms both;
+}
+
+/* The card-to-header morph. Only the geometry is worth animating: the group
+   travels and resizes, while the content inside it swaps almost immediately.
+   Letting the old snapshot linger stretches a small card across a wide header
+   bar, which is where the giant smeared text came from. */
+::view-transition-group(tool-morph) {
+  animation-duration: 480ms;
+  animation-timing-function: var(--spring-soft);
+  z-index: 2;
+}
+
+/* `fill` is the default and distorts whenever the two boxes disagree on aspect
+   ratio, which is the entire point of this morph. */
+::view-transition-old(tool-morph),
+::view-transition-new(tool-morph) {
+  object-fit: cover;
+  object-position: top left;
+}
+
+::view-transition-old(tool-morph) {
+  animation: vt-out 110ms linear both;
+}
+
+::view-transition-new(tool-morph) {
+  animation: vt-in 200ms linear 60ms both;
+}
+
+@keyframes vt-out {
+  to { opacity: 0; }
+}
+
+@keyframes vt-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* 4. Entry choreography ================================================== */
+/* Added by shell.js once a view is on screen -- after any view transition has
+   finished, so the two never fight over the same pixels. */
+
+.view.is-entering > * {
+  animation: boot-fade-up 520ms var(--spring-soft) both;
+}
+
+.view.is-entering > *:nth-child(1) { animation-delay: 40ms; }
+.view.is-entering > *:nth-child(2) { animation-delay: 110ms; }
+.view.is-entering > *:nth-child(3) { animation-delay: 180ms; }
+.view.is-entering > *:nth-child(4) { animation-delay: 250ms; }
+
+/* Lists built as part of a view arriving. Capped upstream so a long list does
+   not turn into a slow wave. */
+.agent-card.is-new,
+.queue-chip.is-new {
+  animation: rise-in 460ms var(--spring-soft) both;
+  animation-delay: calc(var(--i, 0) * 34ms);
+}
+
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Match rows are different: they arrive when the network answers, which is
+   usually *after* the view is already on screen. Anything with travel in it
+   reads as a second entrance -- as though the tool had reloaded. A short fade
+   in place says "the data landed" without performing. */
+.match-row {
+  animation: settle-in 220ms linear both;
+  animation-delay: calc(var(--i, 0) * 12ms);
+}
+
+@keyframes settle-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* 5. Micro-motion ======================================================== */
+
+/* Any text swapped through motion.js swapText(). */
+.is-swapped {
+  animation: text-in 320ms var(--ease-out) both;
+}
+
+@keyframes text-in {
+  from { opacity: 0; transform: translateY(4px); filter: blur(2px); }
+  to   { opacity: 1; transform: none; filter: blur(0); }
+}
+
+/* The back button arrives from the direction it sends you. */
+.back-btn:not([hidden]) {
+  animation: slide-in-left 420ms var(--spring) both;
+}
+
+@keyframes slide-in-left {
+  from { opacity: 0; transform: translateX(-10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Rank badge lands with a little weight behind it. */
+.rank-badge img:not([hidden]) {
+  animation: pop-in 620ms var(--spring) both;
+}
+
+@keyframes pop-in {
+  from { opacity: 0; transform: scale(0.6); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Settings dialog: springs in, and the backdrop blur ramps rather than
+   appearing fully formed. */
+.modal:not([hidden]) .modal-backdrop {
+  animation: backdrop-in 380ms var(--ease-out) both;
+}
+
+.modal:not([hidden]) .modal-panel {
+  animation: modal-spring-in 520ms var(--spring) both;
+}
+
+@keyframes backdrop-in {
+  from { opacity: 0; -webkit-backdrop-filter: blur(0); backdrop-filter: blur(0); }
+  to   { opacity: 1; }
+}
+
+@keyframes modal-spring-in {
+  from { opacity: 0; transform: translateY(16px) scale(0.94); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* 6. Degradation ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .boot-mark,
+  .boot-word,
+  .boot-status,
+  .boot.is-done,
+  body[data-booted] .topbar,
+  body[data-booted] .viewport,
+  body[data-booted] .tool-card,
+  .view.is-entering > *,
+  .agent-card.is-new,
+  .match-row,
+  .queue-chip.is-new,
+  .preset-card,
+  .back-btn:not([hidden]),
+  .rank-badge img:not([hidden]),
+  .modal:not([hidden]) .modal-panel,
+  .modal:not([hidden]) .modal-backdrop,
+  .is-swapped {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+  }
+
+  .boot-ring {
+    animation: none;
+  }
+
+  /* View transitions are skipped in JS as well; this covers the case of the
+     API running anyway. */
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation-duration: 1ms !important;
+  }
+}
+
+@media (forced-colors: active) {
+  .boot-ring,
+  .boot-mark img {
+    display: none;
+  }
+}

@@ -248,7 +248,7 @@
           </div>
           <h3>Auto-queue</h3>
           <p>
-            Requeues when a match ends, confirms the party ready check, and picks the queue. It refuses
+            Requeues when a match ends and picks the queue. It refuses
             to queue mid-match and stops itself after a set number of games.
           </p>
         </article>
@@ -404,6 +404,19 @@
            as the nav anchor, and a duplicate id makes getElementById pick the
            section instead of this. -->
       <div class="rep reveal" id="demo-app" data-phase="idle" data-role="unknown" data-view="home">
+        <!-- Plays the first time the demo scrolls into view; js/demo.js unhides
+             it, and a deadline finishes it even if the observer never reports. -->
+        <div class="rep-boot" id="demo-boot" role="status" aria-live="polite" hidden>
+          <div class="rep-boot-inner">
+            <span class="rep-boot-mark">
+              <span class="rep-boot-ring" aria-hidden="true"></span>
+              <img src="assets/img/logo-256.png" alt="" width="54" height="54" decoding="async">
+            </span>
+            <p class="rep-boot-word">Astral</p>
+            <p class="rep-boot-status" id="demo-boot-status">Starting…</p>
+          </div>
+        </div>
+
         <header class="rep-topbar rep-glass">
           <div class="rep-brand">
             <button class="rep-back" type="button" id="demo-back" hidden>
@@ -465,7 +478,7 @@
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h11"/><path d="M4 12h7"/><path d="M4 17h11"/><path d="m17 9 3 3-3 3"/></svg>
                 </span>
                 <span class="rep-tool-name">Auto-queue</span>
-                <span class="rep-tool-desc">Requeue after a match, ready up on its own, and pick the queue.</span>
+                <span class="rep-tool-desc">Requeue after a match and pick the queue.</span>
                 <span class="rep-tool-status" id="demo-status-autoqueue" data-live="off">
                   <span class="rep-tool-dot" aria-hidden="true"></span><span>Idle</span>
                 </span>
@@ -605,14 +618,6 @@
                 <span>
                   <span class="rep-toggle-title">Requeue after a match</span>
                   <span class="rep-toggle-hint">Re-enters the queue once the match ends and you are back in the menus.</span>
-                </span>
-              </label>
-
-              <label class="rep-toggle-row">
-                <input type="checkbox" id="demo-opt-ready">
-                <span>
-                  <span class="rep-toggle-title">Ready up automatically</span>
-                  <span class="rep-toggle-hint">Confirms the party ready check without you having to be at the window.</span>
                 </span>
               </label>
 

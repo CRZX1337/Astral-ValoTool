@@ -5,6 +5,7 @@
 
 import { monogram } from "../roles.js";
 import { errorMessage, isRetargeting, phase, selectedAgent, startLock, stopLock } from "../store.js";
+import { swapText } from "./motion.js";
 
 const LOOP_LABELS = {
   booting: "Loading",
@@ -55,8 +56,8 @@ export function mountControlPanel() {
     heroBadge.hidden = current !== "locked";
     heroArt.dataset.phase = current;
 
-    statusLine.textContent = statusText(state, current);
-    metaLoop.textContent = LOOP_LABELS[current] ?? "Standby";
+    swapText(statusLine, statusText(state, current));
+    swapText(metaLoop, LOOP_LABELS[current] ?? "Standby");
     metaUpdated.textContent = formatTime(state.lock?.updatedAt);
 
     const alert = current === "offline"

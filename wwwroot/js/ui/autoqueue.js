@@ -1,5 +1,5 @@
 /**
- * Auto-queue view: the queue picker, the two automation toggles, and the
+ * Auto-queue view: the queue picker, the automation toggle, and the
  * guard-rail settings.
  *
  * Settings save on change rather than behind a Save button -- there is no draft
@@ -7,6 +7,7 @@
  */
 
 import { queueNow, saveQueueOptions, toggleAutoQueue } from "../store.js";
+import { stagger, swapText } from "./motion.js";
 
 export function mountAutoQueue() {
   const startButton = document.getElementById("queueStart");
@@ -20,7 +21,6 @@ export function mountAutoQueue() {
   const enterButton = document.getElementById("queueEnter");
   const leaveButton = document.getElementById("queueLeave");
   const autoRequeue = document.getElementById("optAutoRequeue");
-  const autoReady = document.getElementById("optAutoReady");
   const saveNote = document.getElementById("queueSaveNote");
 
   const delay = bindNumber("optRequeueDelay", "optRequeueDelayValue", 0, 60000,
@@ -34,21 +34,19 @@ export function mountAutoQueue() {
   leaveButton.addEventListener("click", () => void queueNow(false));
 
   autoRequeue.addEventListener("change", () => void saveQueueOptions({ autoRequeue: autoRequeue.checked }));
-  autoReady.addEventListener("change", () => void saveQueueOptions({ autoReadyUp: autoReady.checked }));
 
   const chips = new Map();
   let builtPicker = false;
 
+  // Paints while hidden on purpose -- see the note in tracker.js. The queue
+  // chips in particular were being built the moment the view opened, so their
+  // stagger played straight after the morph.
   return function render(state) {
-    if (state.view !== "autoqueue") {
-      return;
-    }
-
     const queue = state.autoqueue;
     const options = state.queueOptions;
     const running = Boolean(queue?.isRunning);
 
-    status.textContent = queue?.status ?? "Idle.";
+    swapText(status, queue?.status ?? "Idle.");
     alert.hidden = !queue?.error;
     alert.textContent = queue?.error ?? "";
 
@@ -84,10 +82,6 @@ export function mountAutoQueue() {
         autoRequeue.checked = Boolean(options.autoRequeue);
       }
 
-      if (document.activeElement !== autoReady) {
-        autoReady.checked = Boolean(options.autoReadyUp);
-      }
-
       delay.sync(options.requeueDelayMs);
       limit.sync(options.maxConsecutiveRequeues);
     }
@@ -106,12 +100,21 @@ function buildPicker(picker, queues, chips) {
     chip.textContent = queue.name;
     chip.setAttribute("aria-pressed", "false");
     chip.addEventListener("click", () => void saveQueueOptions({ queueId: queue.id }));
+    chip.classList.add("is-new");
 
     chips.set(queue.id, chip);
     fragment.append(chip);
   }
 
+  stagger(fragment.children);
   picker.replaceChildren(fragment);
+
+  // Drop the flag once the wave is over, so a later re-render does not replay it.
+  window.setTimeout(() => {
+    for (const chip of chips.values()) {
+      chip.classList.remove("is-new");
+    }
+  }, 900);
 }
 
 /**

@@ -28,6 +28,15 @@ import { sortRoles } from "./roles.js";
 /** Views the shell can show. `home` is the launcher; the rest are tools. */
 export const VIEWS = ["home", "instalock", "tracker", "autoqueue"];
 
+/**
+ * How long to let a view transition settle before a tool fetches anything.
+ *
+ * Loading immediately means the request lands mid-transition and the content
+ * changes underneath the snapshot the user is watching, so the tool appears to
+ * populate itself twice. Comfortably covers the 480ms morph in css/motion.css.
+ */
+const VIEW_SETTLE_MS = 520;
+
 /** How long the save button keeps saying "Saved" before returning to idle. */
 const SAVED_NOTICE_MS = 2200;
 
@@ -194,19 +203,27 @@ export function setView(view) {
   state.actionError = null;
   emit();
 
-  if (view === "tracker" && !state.tracker?.updatedAt && !state.trackerPending) {
-    void refreshTrackerState();
-  }
-
-  if (view === "autoqueue") {
-    if (!state.queueOptions) {
-      void loadQueueOptions();
+  // Deferred so the fetch cannot land while the view is still animating in.
+  // Re-checked on the way out: by then the user may have gone somewhere else.
+  window.setTimeout(() => {
+    if (state.view !== view) {
+      return;
     }
 
-    if (!state.queuePending) {
-      void refreshQueueState();
+    if (view === "tracker" && !state.tracker?.updatedAt && !state.trackerPending) {
+      void refreshTrackerState();
     }
-  }
+
+    if (view === "autoqueue") {
+      if (!state.queueOptions) {
+        void loadQueueOptions();
+      }
+
+      if (!state.queuePending) {
+        void refreshQueueState();
+      }
+    }
+  }, VIEW_SETTLE_MS);
 }
 
 export function goHome() {

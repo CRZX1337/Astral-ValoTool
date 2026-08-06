@@ -282,4 +282,217 @@
       animation: none;
     }
   }
+
+  /* --- Demo replica: boot sequence and view transitions ------------------ */
+  /* Mirrors the app's wwwroot/css/motion.css so the demo keeps matching the
+     real window. Scoped inside .rep, and the overlay is absolute rather than
+     fixed so it covers the replica and not the page. */
+
+  .rep-boot {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    display: grid;
+    place-items: center;
+    border-radius: 26px;
+    background:
+      radial-gradient(60% 50% at 50% 42%, rgba(91, 181, 255, 0.10), transparent 70%),
+      linear-gradient(180deg, var(--bg-0), var(--bg-1) 60%, var(--bg-2));
+  }
+
+  .rep-boot-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .rep-boot-mark {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 84px;
+    height: 84px;
+    animation: boot-mark-in 900ms var(--ease-spring) both;
+  }
+
+  .rep-boot-mark img {
+    width: 54px;
+    height: 54px;
+    filter: drop-shadow(0 0 18px rgba(91, 181, 255, 0.45));
+  }
+
+  .rep-boot-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: conic-gradient(
+      from 0deg,
+      transparent 0deg,
+      rgba(91, 181, 255, 0.05) 200deg,
+      rgba(255, 255, 255, 0.85) 330deg,
+      transparent 360deg
+    );
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
+    mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
+    animation: boot-ring-spin 1.15s linear infinite;
+  }
+
+  .rep-boot-word {
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--text);
+    animation: boot-fade-up 620ms var(--ease-out) 160ms both;
+  }
+
+  .rep-boot-status {
+    min-height: 1.2em;
+    color: var(--text-dim);
+    font-size: 0.76rem;
+    animation: boot-fade-up 620ms var(--ease-out) 260ms both;
+  }
+
+  .rep-boot.is-done {
+    animation: boot-out 520ms var(--ease-out) both;
+    pointer-events: none;
+  }
+
+  /* Held while the splash is up, exactly as the app holds its shell. */
+  .rep[data-booting] .rep-topbar,
+  .rep[data-booting] .rep-viewport {
+    opacity: 0;
+  }
+
+  .rep[data-booted] .rep-topbar {
+    animation: drop-in 620ms var(--ease-spring) both;
+  }
+
+  .rep[data-booted] .rep-viewport {
+    animation: boot-fade-up 640ms var(--ease-out) 90ms both;
+  }
+
+  .rep[data-booted] .rep-tool-card {
+    animation: rep-card-in 640ms var(--ease-spring) both;
+    animation-delay: calc(180ms + var(--i, 0) * 85ms);
+  }
+
+  @keyframes boot-mark-in {
+    from { opacity: 0; transform: scale(0.72); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  @keyframes boot-ring-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  @keyframes boot-fade-up {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  @keyframes boot-out {
+    from { opacity: 1; transform: scale(1); filter: blur(0); }
+    to   { opacity: 0; transform: scale(1.08); filter: blur(6px); }
+  }
+
+  @keyframes drop-in {
+    from { opacity: 0; transform: translateY(-14px); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  /* The card-to-header morph, same shape as the app's. The replica's topbar is
+     pulled out of the root snapshot for the same reason: left in it, it
+     cross-fades against itself and ghosts two brand labels. */
+  .rep-topbar {
+    view-transition-name: rep-topbar;
+  }
+
+  ::view-transition-old(root) {
+    animation: vt-out 160ms cubic-bezier(0.4, 0, 1, 1) both;
+  }
+
+  ::view-transition-new(root) {
+    animation: vt-in 260ms cubic-bezier(0, 0, 0.2, 1) 110ms both;
+  }
+
+  ::view-transition-group(rep-morph) {
+    animation-duration: 480ms;
+    animation-timing-function: var(--ease-out);
+    z-index: 2;
+  }
+
+  /* `fill` is the default and stretches a small card across a wide header. */
+  ::view-transition-old(rep-morph),
+  ::view-transition-new(rep-morph) {
+    object-fit: cover;
+    object-position: top left;
+  }
+
+  ::view-transition-old(rep-morph) {
+    animation: vt-out 110ms linear both;
+  }
+
+  ::view-transition-new(rep-morph) {
+    animation: vt-in 200ms linear 60ms both;
+  }
+
+  @keyframes vt-out { to { opacity: 0; } }
+  @keyframes vt-in { from { opacity: 0; } to { opacity: 1; } }
+
+  .rep-view.is-entering > * {
+    animation: boot-fade-up 520ms var(--ease-out) both;
+  }
+
+  .rep-view.is-entering > *:nth-child(1) { animation-delay: 40ms; }
+  .rep-view.is-entering > *:nth-child(2) { animation-delay: 110ms; }
+  .rep-view.is-entering > *:nth-child(3) { animation-delay: 180ms; }
+
+  .rep-queue-chip.is-new {
+    animation: rep-rise-in 460ms var(--ease-out) both;
+    animation-delay: calc(var(--i, 0) * 34ms);
+  }
+
+  @keyframes rep-rise-in {
+    from { opacity: 0; transform: translateY(10px) scale(0.98); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  /* Match rows land when the "refresh" resolves, after the view is already on
+     screen. Travel there reads as a second entrance; a short fade does not. */
+  .rep-match-row {
+    animation: rep-settle-in 220ms linear both;
+    animation-delay: calc(var(--i, 0) * 12ms);
+  }
+
+  @keyframes rep-settle-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .rep-boot-mark,
+    .rep-boot-word,
+    .rep-boot-status,
+    .rep-boot.is-done,
+    .rep[data-booted] .rep-topbar,
+    .rep[data-booted] .rep-viewport,
+    .rep[data-booted] .rep-tool-card,
+    .rep-view.is-entering > *,
+    .rep-match-row,
+    .rep-queue-chip.is-new {
+      animation-duration: 1ms !important;
+      animation-delay: 0ms !important;
+    }
+
+    .rep-boot-ring { animation: none; }
+
+    ::view-transition-group(*),
+    ::view-transition-old(*),
+    ::view-transition-new(*) {
+      animation-duration: 1ms !important;
+    }
+  }
+}
 }

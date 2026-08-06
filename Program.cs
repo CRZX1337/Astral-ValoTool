@@ -204,7 +204,6 @@ internal static class Program
             AutoQueueOptions next = new()
             {
                 AutoRequeue = request.AutoRequeue ?? current.AutoRequeue,
-                AutoReadyUp = request.AutoReadyUp ?? current.AutoReadyUp,
                 QueueId = request.QueueId ?? current.QueueId,
                 RequeueDelayMs = request.RequeueDelayMs ?? current.RequeueDelayMs,
                 MaxConsecutiveRequeues = request.MaxConsecutiveRequeues ?? current.MaxConsecutiveRequeues
@@ -445,7 +444,6 @@ internal static class Program
     {
         return new AutoQueueOptionsResponse(
             options.AutoRequeue,
-            options.AutoReadyUp,
             options.QueueId,
             options.RequeueDelayMs,
             options.MaxConsecutiveRequeues,

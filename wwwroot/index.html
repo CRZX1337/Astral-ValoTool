@@ -9,9 +9,24 @@
   <link rel="stylesheet" href="/css/glass.css">
   <link rel="stylesheet" href="/css/shell.css">
   <link rel="stylesheet" href="/css/controls.css">
+  <link rel="stylesheet" href="/css/motion.css">
 </head>
 <body data-phase="booting" data-role="unknown" data-view="home">
   <div class="ambient" aria-hidden="true"></div>
+
+  <!-- Shown by js/ui/boot.js and removed once the agent list is in. Ships
+       hidden on purpose: if the script never runs, the window must open on the
+       interface rather than on a splash nothing will ever clear. -->
+  <div class="boot" id="boot" role="status" aria-live="polite" hidden>
+    <div class="boot-inner">
+      <span class="boot-mark">
+        <span class="boot-ring" aria-hidden="true"></span>
+        <img src="/logo.png" alt="" width="62" height="62" decoding="async">
+      </span>
+      <p class="boot-word">Astral</p>
+      <p class="boot-status" id="bootStatus">Starting…</p>
+    </div>
+  </div>
 
   <div class="app">
     <header class="topbar glass">
@@ -89,7 +104,7 @@
               </svg>
             </span>
             <span class="tool-name">Auto-queue</span>
-            <span class="tool-desc">Requeue after a match, ready up on its own, and pick the queue.</span>
+            <span class="tool-desc">Requeue after a match and pick the queue.</span>
             <span class="tool-status" id="statusAutoqueue" data-live="off">
               <span class="tool-dot" aria-hidden="true"></span><span>Idle</span>
             </span>
@@ -256,14 +271,6 @@
             <span>
               <span class="toggle-title">Requeue after a match</span>
               <span class="toggle-hint">Re-enters the queue once the match ends and you are back in the menus.</span>
-            </span>
-          </label>
-
-          <label class="toggle-row">
-            <input type="checkbox" id="optAutoReady">
-            <span>
-              <span class="toggle-title">Ready up automatically</span>
-              <span class="toggle-hint">Confirms the party ready check without you having to be at the window.</span>
             </span>
           </label>
 

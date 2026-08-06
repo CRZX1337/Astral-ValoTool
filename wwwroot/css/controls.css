@@ -29,6 +29,16 @@
 
 /* 1. Buttons ============================================================= */
 
+/* No backdrop-filter on the controls, deliberately.
+
+   These all sit on a .glass panel that is already blurring, so their own blur
+   re-samples an already-blurred backdrop -- and there are dozens of them. That
+   nesting is what made the window hitch whenever a view transition tore its
+   pseudo-element tree down and the page had to re-rasterise: 39 blurred
+   surfaces, 25 of them nested.
+
+   Visually it costs almost nothing. What sells these as glass is the specular
+   rim, the gradient and the shadow, all of which are still here. */
 .btn,
 .btn-quiet,
 .icon-btn,
@@ -38,8 +48,6 @@
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  -webkit-backdrop-filter: blur(14px) saturate(180%);
-  backdrop-filter: blur(14px) saturate(180%);
   transition:
     transform 520ms var(--spring),
     box-shadow 320ms var(--spring-soft),
@@ -132,11 +140,15 @@
   color: #ff929b;
 }
 
+/* A top-lit gradient in place of the blur. Without it these went flat once the
+   backdrop-filter came off -- the blur had been doing the work of making them
+   look like a surface with thickness, and a gradient does it for free. */
 .btn-quiet,
 .back-btn,
 .queue-chip,
 .chip {
   border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.03));
   box-shadow:
     inset 0 1px 0 var(--lg-rim-soft),
     0 3px 10px rgba(0, 0, 0, 0.22);
@@ -381,17 +393,9 @@
   }
 }
 
-@media (prefers-reduced-transparency: reduce) {
-  .btn,
-  .btn-quiet,
-  .icon-btn,
-  .back-btn,
-  .queue-chip,
-  .chip {
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-  }
-}
+/* No prefers-reduced-transparency block here any more: the controls no longer
+   carry a backdrop-filter for it to turn off. The panels they sit on still do,
+   and css/glass.css handles those. */
 
 @media (forced-colors: active) {
   .btn::after,
@@ -408,8 +412,6 @@
   .back-btn,
   .queue-chip,
   .chip {
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
     box-shadow: none;
   }
 }

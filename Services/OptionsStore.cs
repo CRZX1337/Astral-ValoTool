@@ -167,7 +167,6 @@ public sealed class OptionsStore
             AutoQueue = new AutoQueueOptions
             {
                 AutoRequeue = autoQueue.AutoRequeue,
-                AutoReadyUp = autoQueue.AutoReadyUp,
                 QueueId = string.IsNullOrWhiteSpace(autoQueue.QueueId) ? "competitive" : autoQueue.QueueId.Trim(),
                 RequeueDelayMs = autoQueue.RequeueDelayMs,
                 MaxConsecutiveRequeues = autoQueue.MaxConsecutiveRequeues

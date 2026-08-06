@@ -4,6 +4,7 @@
  */
 
 import { refreshTrackerState, resetSession } from "../store.js";
+import { countUp, stagger, swapText } from "./motion.js";
 
 /** Riot's RR scale within a tier. Radiant runs past it, so the bar clamps. */
 const RR_PER_TIER = 100;
@@ -32,11 +33,13 @@ export function mountTracker() {
 
   let renderedSignature = null;
 
+  // Deliberately paints even while the view is hidden. Gating this on the view
+  // being active meant every first paint -- building the match rows, counting
+  // the session numbers up -- happened the instant the view opened, landing
+  // right on top of the transition and reading as the tool loading twice.
+  // The work is a handful of text writes; doing it early is what makes opening
+  // the tool show finished content.
   return function render(state) {
-    if (state.view !== "tracker") {
-      return;
-    }
-
     const tracker = state.tracker;
     const busy = state.trackerPending || Boolean(tracker?.isLoading);
 
@@ -47,12 +50,17 @@ export function mountTracker() {
     alert.hidden = !tracker?.error;
     alert.textContent = tracker?.error ?? "";
 
-    updated.textContent = tracker?.updatedAt
+    swapText(updated, tracker?.updatedAt
       ? `Updated ${new Date(tracker.updatedAt).toLocaleTimeString()}`
-      : "Not loaded yet.";
+      : "Not loaded yet.");
 
     const rank = tracker?.rank ?? null;
-    rankCard.hidden = !rank;
+
+    // Kept in the layout while a refresh is in flight, holding its placeholder
+    // values. Hiding it until the data lands made the whole card appear from
+    // nothing and shove the match list down, which is the jolt that reads as
+    // the view reloading itself.
+    rankCard.hidden = !rank && !busy;
 
     if (rank) {
       rankName.textContent = rank.tierName;
@@ -78,12 +86,13 @@ export function mountTracker() {
     }
 
     const session = tracker?.session ?? null;
-    wins.textContent = String(session?.wins ?? 0);
-    losses.textContent = String(session?.losses ?? 0);
-    played.textContent = String((session?.wins ?? 0) + (session?.losses ?? 0) + (session?.draws ?? 0));
-
     const net = session?.netRr ?? 0;
-    netRr.textContent = `${net > 0 ? "+" : ""}${net}`;
+
+    countUp(wins, session?.wins ?? 0);
+    countUp(losses, session?.losses ?? 0);
+    countUp(played, (session?.wins ?? 0) + (session?.losses ?? 0) + (session?.draws ?? 0));
+    countUp(netRr, net, (value) => `${value > 0 ? "+" : ""}${value}`);
+
     netRr.classList.toggle("is-up", net > 0);
     netRr.classList.toggle("is-down", net < 0);
 
@@ -150,5 +159,6 @@ function paintMatches(list, matches) {
     fragment.append(row);
   }
 
+  stagger(fragment.children);
   list.replaceChildren(fragment);
 }

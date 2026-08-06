@@ -16,9 +16,6 @@ public sealed class AutoQueueOptions
     /// <summary>Re-enter the queue once a match ends and the client is back in the menus.</summary>
     public bool AutoRequeue { get; set; }
 
-    /// <summary>Confirm the party ready check without the window being focused.</summary>
-    public bool AutoReadyUp { get; set; }
-
     /// <summary>
     /// Which queue to enter, as one of RadiantConnect's <c>QueueId</c> names
     /// ("competitive", "unrated", ...). Stored as a string so an unknown value
