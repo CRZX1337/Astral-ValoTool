@@ -4,18 +4,28 @@
  */
 
 import { startStateFeed } from "./poller.js";
-import { getState, loadAgents, loadQueue, loadQueueOptions, loadTracker, subscribe } from "./store.js";
+import {
+  getState,
+  loadAgents,
+  loadQueue,
+  loadQueueOptions,
+  loadTracker,
+  loadUpdate,
+  subscribe
+} from "./store.js";
 import { mountAgentGrid } from "./ui/agent-grid.js";
 import { mountAutoQueue } from "./ui/autoqueue.js";
 import { mountBoot } from "./ui/boot.js";
 import { mountControlPanel } from "./ui/control-panel.js";
 import { mountControls } from "./ui/controls.js";
 import { mountHeader } from "./ui/header.js";
+import { mountIntel } from "./ui/intel.js";
 import { mountSettings } from "./ui/settings.js";
 import { mountShell } from "./ui/shell.js";
 import { mountTilt } from "./ui/tilt.js";
 import { mountTooltips } from "./ui/tooltip.js";
 import { mountTracker } from "./ui/tracker.js";
+import { mountUpdate } from "./ui/update.js";
 
 // Belt and braces for the context menu: DesktopAppForm turns it off in
 // WebView2 itself, which is the real fix, but that setting is only applied
@@ -31,7 +41,9 @@ const views = [
   mountControlPanel(),
   mountTracker(),
   mountAutoQueue(),
+  mountIntel(),
   mountSettings(),
+  mountUpdate(),
   mountTooltips(),
   mountTilt(),
   mountControls()
@@ -55,5 +67,9 @@ void loadAgents();
 void loadTracker();
 void loadQueue();
 void loadQueueOptions();
+
+// Whatever the last check found, so a pending update is on screen before the
+// startup check (six seconds in, UpdateService.StartupDelay) has run again.
+void loadUpdate();
 
 startStateFeed();

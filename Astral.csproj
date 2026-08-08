@@ -22,12 +22,17 @@
 
   <!-- Identity baked into the Win32 version resource: this is what the file's
        Properties dialog, Task Manager and SmartScreen prompts show, so a
-       downloaded release does not look anonymous. -->
+       downloaded release does not look anonymous.
+
+       <Version> is also what the updater compares against the newest GitHub
+       release tag (UpdateService.ResolveCurrentVersion reads it back off the
+       assembly), so it has to be bumped in the same commit that gets tagged.
+       A build that under-reports its version offers itself an update forever. -->
   <PropertyGroup>
-    <Version>1.0.0</Version>
+    <Version>1.2.0</Version>
     <Product>Astral</Product>
-    <AssemblyTitle>Astral - VALORANT agent instalocker</AssemblyTitle>
-    <Description>Watches VALORANT pre-game and locks your chosen agent, with per-map overrides, adjustable timing and a local API.</Description>
+    <AssemblyTitle>Astral - VALORANT multitool</AssemblyTitle>
+    <Description>Instalocks your chosen agent with a fallback chain, reads the pre-game lobby, tracks rank across a session, and updates itself from GitHub releases.</Description>
     <Authors>CRZX1337</Authors>
     <Company>CRZX1337</Company>
     <Copyright>MIT licensed. Copyright (c) 2026 CRZX1337.</Copyright>

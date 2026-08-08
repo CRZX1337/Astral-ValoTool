@@ -3,8 +3,18 @@
  * the two buttons that drive it.
  */
 
-import { monogram } from "../roles.js";
-import { errorMessage, isRetargeting, phase, selectedAgent, startLock, stopLock } from "../store.js";
+import { monogram, rgba } from "../roles.js";
+import {
+  chainAgents,
+  errorMessage,
+  isRetargeting,
+  moveInChain,
+  phase,
+  removeFromChain,
+  selectedAgent,
+  startLock,
+  stopLock
+} from "../store.js";
 import { swapText } from "./motion.js";
 
 const LOOP_LABELS = {
@@ -33,12 +43,33 @@ export function mountControlPanel() {
   const startButton = document.getElementById("startButton");
   const startLabel = document.getElementById("startLabel");
   const stopButton = document.getElementById("stopButton");
+  const panelChain = document.getElementById("panelChain");
+  const chainList = document.getElementById("chainList");
 
   // undefined, not null: "no agent" is a real value that must still paint once.
   let renderedAgent;
+  let renderedChain;
 
   startButton.addEventListener("click", () => void startLock());
   stopButton.addEventListener("click", () => void stopLock());
+
+  // Delegated: the rows are rebuilt whenever the chain changes, so per-row
+  // listeners would have to be rebound every time.
+  chainList.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-chain-action]");
+
+    if (!button) {
+      return;
+    }
+
+    const name = button.dataset.agent;
+
+    if (button.dataset.chainAction === "remove") {
+      removeFromChain(name);
+    } else {
+      moveInChain(name, button.dataset.chainAction === "up" ? -1 : 1);
+    }
+  });
 
   return function render(state) {
     const current = phase();
@@ -51,6 +82,21 @@ export function mountControlPanel() {
     if (agentName !== renderedAgent) {
       renderedAgent = agentName;
       paintAgent(agent, { heroArt, heroBackdrop, heroPortrait, heroMonogram, heroWatermark, panelName, panelRole });
+    }
+
+    // Only worth showing once there is a fallback to show; a chain of one is
+    // just the target agent again.
+    const chain = chainAgents();
+
+    // Which entry actually got locked is `selectedAgent` once `isLocked` is set:
+    // the worker narrows the chain down to the one it landed on.
+    const landed = state.lock?.isLocked ? state.lock.selectedAgent : null;
+    const signature = `${chain.map((entry) => entry.name).join(">")}|${landed ?? ""}`;
+
+    if (signature !== renderedChain) {
+      renderedChain = signature;
+      panelChain.hidden = chain.length < 2;
+      paintChain(chainList, chain, landed);
     }
 
     heroBadge.hidden = current !== "locked";
@@ -68,13 +114,66 @@ export function mountControlPanel() {
     panelAlert.textContent = alert ?? "";
 
     const retargeting = isRetargeting();
-    startButton.disabled = !usable || !state.selected || Boolean(state.pending) || (running && !retargeting);
+    startButton.disabled = !usable || state.chain.length === 0 || Boolean(state.pending) || (running && !retargeting);
     startButton.classList.toggle("is-busy", state.pending === "start");
     startLabel.textContent = startText(state, running, retargeting);
 
     stopButton.disabled = !usable || !running || Boolean(state.pending);
     stopButton.classList.toggle("is-busy", state.pending === "stop");
   };
+}
+
+function paintChain(list, chain, lockedAgent) {
+  list.replaceChildren();
+
+  chain.forEach((agent, index) => {
+    const row = document.createElement("li");
+    row.className = "chain-row";
+    row.dataset.state = agent.name === lockedAgent ? "locked" : "";
+
+    // An agent that is in the chain but missing from the grid has no gradient
+    // to tint with, which is why this is conditional rather than assumed.
+    const tint = agent.gradient?.[0];
+
+    if (tint) {
+      row.style.setProperty("--chain-tint", rgba(tint, 0.5));
+    }
+
+    const rank = document.createElement("span");
+    rank.className = "chain-rank";
+    rank.textContent = String(index + 1);
+
+    const name = document.createElement("span");
+    name.className = "chain-name";
+    name.textContent = agent.name;
+
+    row.append(rank, name);
+
+    // Nothing to move at the ends, so those buttons are simply absent rather
+    // than present and disabled.
+    if (index > 0) {
+      row.append(chainButton("up", agent.name, "↑", `Move ${agent.name} up`));
+    }
+
+    if (index < chain.length - 1) {
+      row.append(chainButton("down", agent.name, "↓", `Move ${agent.name} down`));
+    }
+
+    row.append(chainButton("remove", agent.name, "✕", `Remove ${agent.name}`));
+    list.append(row);
+  });
+}
+
+function chainButton(action, agent, glyph, label) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "chain-action";
+  button.dataset.chainAction = action;
+  button.dataset.agent = agent;
+  button.textContent = glyph;
+  button.title = label;
+  button.setAttribute("aria-label", label);
+  return button;
 }
 
 function paintAgent(agent, elements) {
@@ -132,7 +231,7 @@ function statusText(state, current) {
     return state.lock.status;
   }
 
-  return state.selected ? "Ready when you are." : "Pick an agent to begin.";
+  return state.chain.length > 0 ? "Ready when you are." : "Pick an agent to begin.";
 }
 
 function startText(state, running, retargeting) {
@@ -148,7 +247,7 @@ function startText(state, running, retargeting) {
     return "Monitoring…";
   }
 
-  return "Start locking";
+  return state.chain.length > 1 ? `Start locking (${state.chain.length})` : "Start locking";
 }
 
 function formatTime(value) {

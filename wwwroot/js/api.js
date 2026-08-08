@@ -19,11 +19,12 @@ export function fetchState() {
   return request("/api/state");
 }
 
-export function requestLock(agent) {
+/** `agents` is the fallback chain, most-wanted first. */
+export function requestLock(agents) {
   return request("/api/lock", {
     method: "POST",
     headers: JSON_HEADERS,
-    body: JSON.stringify({ agent })
+    body: JSON.stringify({ agents })
   });
 }
 
@@ -43,6 +44,57 @@ export function refreshTracker() {
 
 export function resetTrackerSession() {
   return request("/api/tracker/session/reset", { method: "POST" });
+}
+
+// --- pre-game lobby intel -----------------------------------------------
+
+export function fetchIntel() {
+  return request("/api/intel");
+}
+
+/** Turns the lobby watch on or off. Driven by the intel view being open. */
+export function setIntelWatching(watching) {
+  return request("/api/intel/watch", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ watching })
+  });
+}
+
+// --- updater ------------------------------------------------------------
+
+export function fetchUpdate() {
+  return request("/api/update");
+}
+
+export function checkForUpdate() {
+  return request("/api/update/check", { method: "POST" });
+}
+
+/**
+ * Returns as soon as the download starts, not when it finishes. Progress
+ * arrives over the event stream like every other module's state.
+ */
+export function downloadUpdate() {
+  return request("/api/update/download", { method: "POST" });
+}
+
+export function cancelUpdateDownload() {
+  return request("/api/update/cancel", { method: "POST" });
+}
+
+/** Replaces the binary and restarts, so a success response is the last one. */
+export function applyUpdate() {
+  return request("/api/update/apply", { method: "POST" });
+}
+
+/** Silences one version. The release after it is offered as normal. */
+export function skipUpdate(version) {
+  return request("/api/update/skip", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ version })
+  });
 }
 
 // --- auto-queue ---------------------------------------------------------

@@ -9,4 +9,8 @@ public sealed class AstralSettings
     public InstalockerOptions Instalocker { get; set; } = new();
 
     public AutoQueueOptions AutoQueue { get; set; } = new();
+
+    public TrackerOptions Tracker { get; set; } = new();
+
+    public UpdateOptions Update { get; set; } = new();
 }

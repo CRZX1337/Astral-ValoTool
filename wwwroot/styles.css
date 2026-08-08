@@ -217,6 +217,13 @@ dd {
   padding: 12px;
 }
 
+/* The update banner is a third child of this grid, but only sometimes: while
+   hidden it leaves the flow entirely, so the template has to follow it rather
+   than hold a row that would sit empty for most of the app's life. */
+.app:has(> .update-banner:not([hidden])) {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
 .topbar {
   display: flex;
   align-items: center;
@@ -316,6 +323,232 @@ dd {
 
 [data-phase="offline"] .phase-dot {
   animation: blink 1.6s ease-in-out infinite;
+}
+
+/* Update banner. Purple by default so it reads as news rather than as the
+   amber "something needs attention" of .notice-pill; the stage overrides
+   below take it green once a download is sitting there ready to install. */
+.update-banner {
+  --update-accent: #a97bff;
+  --update-line: rgba(169, 123, 255, 0.28);
+  --update-tint: rgba(169, 123, 255, 0.09);
+  --update-glow: rgba(169, 123, 255, 0.42);
+
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 11px 13px;
+  border-radius: 14px;
+  border: 1px solid var(--update-line);
+  animation: update-enter 320ms var(--ease) both;
+}
+
+/* The tint rides on a pseudo-element rather than the banner's own background
+   so it cannot be flattened by whichever of .glass and this rule the cascade
+   happens to put last. */
+.update-banner::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(100deg, var(--update-tint), transparent 58%);
+  pointer-events: none;
+}
+
+.update-banner[data-stage="Ready"],
+.update-banner[data-stage="Restarting"] {
+  --update-accent: #3ddc97;
+  --update-line: rgba(61, 220, 151, 0.30);
+  --update-tint: rgba(61, 220, 151, 0.10);
+  --update-glow: rgba(61, 220, 151, 0.38);
+}
+
+.update-banner[data-stage="Failed"] {
+  --update-accent: var(--bad);
+  --update-line: rgba(255, 90, 104, 0.32);
+  --update-tint: rgba(255, 90, 104, 0.09);
+  --update-glow: rgba(255, 90, 104, 0.40);
+}
+
+.update-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  border: 1px solid var(--update-line);
+  background: var(--surface-raised);
+  color: var(--update-accent);
+  box-shadow: 0 0 18px -5px var(--update-glow);
+}
+
+.update-mark svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* One moving part instead of a second spinner: the arrow in the icon nudges
+   down while bytes are arriving. */
+.update-banner[data-stage="Downloading"] .update-mark svg {
+  animation: update-nudge 1.4s var(--ease) infinite;
+}
+
+.update-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.update-title {
+  font-size: 0.9rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.update-note {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+/* A release body is markdown of any length, so this is a teaser and the link
+   below it is where the whole thing lives. */
+.update-notes {
+  margin: 3px 0 0;
+  max-height: 2.6em;
+  overflow: hidden;
+  font-size: 0.74rem;
+  line-height: 1.3;
+  color: var(--text-dim);
+  white-space: pre-line;
+}
+
+.update-link {
+  align-self: flex-start;
+  margin-top: 3px;
+  font-size: 0.73rem;
+  color: var(--update-accent);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 150ms var(--ease);
+}
+
+.update-link:hover {
+  border-bottom-color: currentColor;
+}
+
+.update-bar {
+  position: relative;
+  overflow: hidden;
+  height: 5px;
+  margin: 6px 0 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.update-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--update-accent);
+  box-shadow: 0 0 12px -2px var(--update-glow);
+  transition: width 260ms var(--ease);
+}
+
+/* No Content-Length on the asset: a fixed sliver travels the bar instead of a
+   percentage that would be invented. */
+.update-fill[data-indeterminate="1"] {
+  transition: none;
+  animation: update-sweep 1.25s var(--ease) infinite;
+}
+
+.update-actions {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: 8px;
+}
+
+.update-actions .btn {
+  min-height: 32px;
+  padding: 0 14px;
+  font-size: 0.78rem;
+}
+
+.update-close {
+  width: 28px;
+  height: 28px;
+}
+
+/* Two classes deep on purpose: the generic `.icon-btn svg` fills its paths,
+   and this icon is drawn in strokes. */
+.update-banner .update-close svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+}
+
+@keyframes update-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes update-nudge {
+  0%,
+  60%,
+  100% {
+    transform: none;
+  }
+
+  30% {
+    transform: translateY(2px);
+  }
+}
+
+@keyframes update-sweep {
+  from {
+    transform: translateX(-110%);
+  }
+
+  to {
+    transform: translateX(240%);
+  }
+}
+
+/* Narrow window: the buttons drop under the text rather than squeezing the
+   release name down to an ellipsis. */
+@media (max-width: 640px) {
+  .update-banner {
+    grid-template-columns: auto minmax(0, 1fr);
+    row-gap: 10px;
+  }
+
+  .update-actions {
+    grid-column: 2;
+    justify-content: flex-end;
+  }
 }
 
 /* 4. Toolbar ============================================================ */
@@ -620,6 +853,28 @@ dd {
   animation: pulse-ring 1.8s var(--ease) infinite;
 }
 
+/* Fallback position, top left so it never sits under the phase dot. Only drawn
+   for a chain of two or more -- a lone "1" would say nothing. */
+.agent-card[data-rank]:not([data-rank=""])::before {
+  content: attr(data-rank);
+  position: absolute;
+  top: 7px;
+  left: 7px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #07080b;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 2px rgba(7, 8, 11, 0.8);
+}
+
 .agent-card.is-skeleton {
   height: 118px;
   cursor: default;
@@ -790,6 +1045,101 @@ dd {
   line-height: 1.05;
   letter-spacing: -0.035em;
   overflow-wrap: anywhere;
+}
+
+/* --- fallback chain ----------------------------------------------------- */
+
+.panel-chain {
+  min-width: 0;
+}
+
+.chain-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 7px;
+  list-style: none;
+}
+
+.chain-row {
+  --chain-tint: rgba(255, 255, 255, 0.12);
+
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 5px 0 7px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 9px;
+  background:
+    linear-gradient(90deg, var(--chain-tint), transparent 72%),
+    rgba(255, 255, 255, 0.025);
+}
+
+.chain-row[data-state="locked"] {
+  border-color: var(--phase, var(--accent));
+}
+
+.chain-rank {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 9px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+
+.chain-row[data-state="locked"] .chain-rank {
+  background: var(--accent);
+  color: #07080b;
+}
+
+.chain-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chain-action {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 150ms var(--ease), color 150ms var(--ease);
+}
+
+.chain-action:hover {
+  background: rgba(255, 255, 255, 0.09);
+  color: var(--text);
+}
+
+.chain-action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.chain-hint {
+  margin-top: 6px;
+  font-size: 0.66rem;
+  line-height: 1.4;
+  color: var(--text-dim);
 }
 
 .role-chip {
@@ -1409,5 +1759,14 @@ dd {
 
   .agent-card:hover .card-art {
     transform: none;
+  }
+
+  /* The blanket rule above stops the sweep mid-travel, which would park the
+     sliver off the end of the bar. Fill it instead: a solid bar still says
+     "working", it just does not move. */
+  .update-fill[data-indeterminate="1"] {
+    animation: none;
+    width: 100% !important;
+    opacity: 0.55;
   }
 }

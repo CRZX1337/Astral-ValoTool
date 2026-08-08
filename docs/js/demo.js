@@ -162,6 +162,7 @@ export async function initDemo() {
     instalock: "Instalock",
     tracker: "Rank tracker",
     autoqueue: "Auto-queue",
+    intel: "Lobby intel",
   };
 
   const views = new Map(
@@ -174,6 +175,7 @@ export async function initDemo() {
     instalock: document.getElementById("demo-status-instalock"),
     tracker: document.getElementById("demo-status-tracker"),
     autoqueue: document.getElementById("demo-status-autoqueue"),
+    intel: document.getElementById("demo-status-intel"),
   };
 
   let view = "home";
@@ -200,6 +202,9 @@ export async function initDemo() {
     brand.textContent = TITLES[next] ?? "Astral";
     /* The gear only configures the instalocker, exactly as in the app. */
     gear.hidden = next !== "instalock";
+
+    /* Same rule as the app: the watch only runs while the view is on screen. */
+    setIntelWatching(next === "intel");
   }
 
   function enter(next) {
@@ -790,6 +795,111 @@ export async function initDemo() {
   });
   queue.stop.addEventListener("click", stopQueue);
   paintQueueChips();
+
+  /* ================= Lobby intel ================= */
+
+  /* A canned agent select. The app reads this from the client; here it is a
+     scripted roster that fills in, so the view shows what it looks like mid-pick
+     rather than sitting on a finished lobby. */
+  const LOBBY = [
+    { slot: 0, self: true, captain: true, name: "You#EUW", agent: "Neon", role: "duelist", at: 0, tier: "Diamond 1" },
+    { slot: 1, name: "Kestrel#1337", agent: "Sova", role: "initiator", at: 0, tier: "Platinum 3" },
+    { slot: 2, incognito: true, agent: "Omen", role: "controller", at: 2, tier: "Platinum 1" },
+    { slot: 3, name: "mint#000", agent: null, role: null, at: 4, tier: "Immortal 1" },
+    { slot: 4, name: "raze enjoyer#na1", agent: "Raze", role: "duelist", at: 3, tier: "Gold 1" },
+  ];
+
+  const intel = {
+    list: document.getElementById("demo-lobby-list"),
+    map: document.getElementById("demo-intel-map"),
+    status: document.getElementById("demo-intel-status"),
+    timer: document.getElementById("demo-intel-timer"),
+    locked: document.getElementById("demo-intel-locked"),
+  };
+
+  let intelTick = 0;
+  let intelTimer = null;
+
+  /* `at` is the tick a player locks on. Before it they are hovering, which is
+     what makes the roster visibly settle as the countdown runs. */
+  function paintLobby() {
+    if (!intel.list) return;
+
+    const seconds = Math.max(0, 45 - intelTick * 3);
+    let locked = 0;
+
+    intel.list.replaceChildren(
+      ...LOBBY.map((player, index) => {
+        const settled = player.agent !== null && intelTick >= player.at;
+        if (settled) locked += 1;
+
+        const row = document.createElement("div");
+        row.className = "rep-lobby-row";
+        row.dataset.pick = player.agent === null ? "none" : settled ? "locked" : "hovering";
+        row.dataset.role = player.role ?? "unknown";
+        row.style.setProperty("--i", String(index));
+        if (player.self) row.dataset.self = "1";
+
+        const portrait = document.createElement("span");
+        portrait.className = "rep-lobby-portrait";
+        portrait.textContent = String(player.slot + 1);
+
+        const body = document.createElement("div");
+        body.className = "rep-lobby-identity";
+
+        const name = document.createElement("div");
+        name.className = "rep-lobby-name";
+        name.textContent = player.incognito ? "Incognito" : player.name;
+        if (player.incognito) name.dataset.incognito = "1";
+
+        if (player.captain) {
+          const tag = document.createElement("span");
+          tag.className = "rep-lobby-tag";
+          tag.textContent = "Party lead";
+          name.append(" ", tag);
+        }
+
+        const pick = document.createElement("div");
+        pick.className = "rep-lobby-pick";
+        pick.textContent = player.agent
+          ? `${player.agent} · ${settled ? "Locked" : "Hovering"}`
+          : "Picking…";
+
+        body.append(name, pick);
+
+        const rank = document.createElement("span");
+        rank.className = "rep-lobby-tier";
+        rank.textContent = player.tier;
+
+        row.append(portrait, body, rank);
+        return row;
+      })
+    );
+
+    intel.timer.textContent = `${seconds}s`;
+    intel.locked.textContent = `${locked}/${LOBBY.length} locked`;
+    intel.status.textContent = `Agent select on Ascent. ${locked} of ${LOBBY.length} locked.`;
+    paintCard("intel", `Ascent · ${locked}/${LOBBY.length}`, true);
+  }
+
+  /* Only runs while the view is open: the real watch holds a connection lease,
+     and an interval ticking behind a hidden section is the same waste here. */
+  function setIntelWatching(watching) {
+    clearInterval(intelTimer);
+    intelTimer = null;
+
+    if (!watching) {
+      paintCard("intel", "Not watching", false);
+      return;
+    }
+
+    intelTick = 0;
+    paintLobby();
+    intelTimer = setInterval(() => {
+      intelTick = intelTick >= 6 ? 0 : intelTick + 1;
+      paintLobby();
+    }, 1600);
+  }
 
   /* ================= Boot ================= */
 

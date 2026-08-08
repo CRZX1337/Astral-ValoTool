@@ -13,7 +13,8 @@ const TITLES = {
   home: "Astral",
   instalock: "Instalock",
   tracker: "Rank tracker",
-  autoqueue: "Auto-queue"
+  autoqueue: "Auto-queue",
+  intel: "Lobby intel"
 };
 
 /**
@@ -67,7 +68,8 @@ export function mountShell() {
   const statuses = {
     instalock: document.getElementById("statusInstalock"),
     tracker: document.getElementById("statusTracker"),
-    autoqueue: document.getElementById("statusAutoqueue")
+    autoqueue: document.getElementById("statusAutoqueue"),
+    intel: document.getElementById("statusIntel")
   };
 
   /** The strip a card morphs into: the tool's header bar, or the view itself. */
@@ -172,6 +174,10 @@ export function mountShell() {
     // Both arms: `finished` rejects when a transition is skipped, which happens
     // whenever two land close together.
     transition.finished.then(cleanup, cleanup);
+
+    // `ready` rejects on that same skip, and an unobserved rejection is reported
+    // as an uncaught error. Nothing to do about it, but it has to be observed.
+    transition.ready.catch(() => {});
   }
 
   let rendered = null;
@@ -187,6 +193,7 @@ export function mountShell() {
     paintStatus(statuses.instalock, instalockStatus(state));
     paintStatus(statuses.tracker, trackerStatus(state));
     paintStatus(statuses.autoqueue, autoqueueStatus(state));
+    paintStatus(statuses.intel, intelStatus(state));
   };
 }
 
@@ -235,4 +242,20 @@ function autoqueueStatus(state) {
   }
 
   return { text: queue.currentQueueId ? `Running · ${queue.currentQueueId}` : "Running", live: true };
+}
+
+function intelStatus(state) {
+  const intel = state.intel;
+
+  if (!intel?.isWatching) {
+    return { text: "Not watching", live: false };
+  }
+
+  if (!intel.isActive) {
+    return { text: "Waiting for agent select", live: false };
+  }
+
+  const players = intel.players?.length ?? 0;
+
+  return { text: `${intel.mapName ?? "Agent select"} · ${intel.lockedCount ?? 0}/${players}`, live: true };
 }

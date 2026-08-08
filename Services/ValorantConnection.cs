@@ -26,13 +26,39 @@ public sealed class ValorantConnection
         "VALORANT-Win32-Shipping"
     ];
 
+    /// <summary>Serialises connection creation, which is the only slow step.</summary>
     private readonly SemaphoreSlim _gate = new(1, 1);
+
+    /// <summary>Guards the fields below. Never held across anything that blocks.</summary>
+    private readonly Lock _sync = new();
 
     private Initiator? _initiator;
     private int _leases;
 
+    /// <summary>
+    /// Identifies the current <see cref="Initiator"/> instance. Every lease
+    /// carries the epoch it was issued under, and <see cref="Release"/> ignores
+    /// a lease whose epoch has since been retired.
+    ///
+    /// Without this, returning a lease that <see cref="Invalidate"/> already
+    /// discarded would decrement the lease count of whatever connection replaced
+    /// it -- and take a live one down with it. That is reachable whenever one
+    /// tool hits an error while another is working: every service calls
+    /// Invalidate() from its catch block, and the tools run concurrently.
+    /// </summary>
+    private int _epoch;
+
     /// <summary>True while at least one tool holds an open lease.</summary>
-    public bool IsConnected => Volatile.Read(ref _leases) > 0 && _initiator is not null;
+    public bool IsConnected
+    {
+        get
+        {
+            lock (_sync)
+            {
+                return _leases > 0 && _initiator is not null;
+            }
+        }
+    }
 
     /// <summary>
     /// Borrows the shared connection, opening it if this is the first caller.
@@ -47,26 +73,51 @@ public sealed class ValorantConnection
 
         try
         {
-            if (_initiator is null)
+            lock (_sync)
             {
-                if (!IsValorantRunning())
+                if (_initiator is not null)
                 {
-                    throw new ValorantUnavailableException(
-                        "Valorant is not running. Start the game, then try again.");
-                }
-
-                try
-                {
-                    _initiator = new Initiator();
-                }
-                catch (Exception ex)
-                {
-                    throw new ValorantUnavailableException($"Could not attach to Valorant: {ex.Message}");
+                    _leases++;
+                    return new ValorantLease(this, _initiator, _epoch);
                 }
             }
 
-            _leases++;
-            return new ValorantLease(this, _initiator);
+            if (!IsValorantRunning())
+            {
+                throw new ValorantUnavailableException(
+                    "Valorant is not running. Start the game, then try again.");
+            }
+
+            Initiator created;
+
+            try
+            {
+                // Deliberately outside the lock: attaching to the client tails a
+                // log and opens a socket, which is far too long to hold a monitor
+                // that Dispose() on a lease also needs.
+                created = new Initiator();
+            }
+            catch (Exception ex)
+            {
+                throw new ValorantUnavailableException($"Could not attach to Valorant: {ex.Message}");
+            }
+
+            Initiator? stale;
+
+            lock (_sync)
+            {
+                // An Invalidate() that landed while we were attaching leaves this
+                // instance as the newest either way, so it becomes the current
+                // one and starts a fresh epoch. Leases from the old epoch are
+                // already retired, which is why the count restarts at this one.
+                stale = _initiator;
+                _initiator = created;
+                _epoch++;
+                _leases = 1;
+            }
+
+            Dispose(stale);
+            return new ValorantLease(this, created, _epoch);
         }
         finally
         {
@@ -81,41 +132,49 @@ public sealed class ValorantConnection
     /// </summary>
     public void Invalidate()
     {
-        _gate.Wait();
+        Initiator? stale;
 
-        try
+        lock (_sync)
         {
-            Initiator? stale = _initiator;
+            stale = _initiator;
             _initiator = null;
             _leases = 0;
-            Dispose(stale);
+            _epoch++;
         }
-        finally
-        {
-            _gate.Release();
-        }
+
+        Dispose(stale);
     }
 
-    internal void Release()
+    /// <summary>
+    /// Returns a lease. Called from <see cref="ValorantLease.Dispose"/>, which is
+    /// synchronous and can run on any thread, so this only ever takes the cheap
+    /// monitor -- never the acquire gate, which is held across an attach.
+    /// </summary>
+    internal void Release(int epoch)
     {
-        _gate.Wait();
+        Initiator? last;
 
-        try
+        lock (_sync)
         {
+            if (epoch != _epoch)
+            {
+                // A lease from a connection that has already been discarded.
+                // Its accounting went with it.
+                return;
+            }
+
             if (--_leases > 0)
             {
                 return;
             }
 
             _leases = 0;
-            Initiator? last = _initiator;
+            last = _initiator;
             _initiator = null;
-            Dispose(last);
+            _epoch++;
         }
-        finally
-        {
-            _gate.Release();
-        }
+
+        Dispose(last);
     }
 
     /// <summary>
@@ -168,7 +227,7 @@ public sealed class ValorantConnection
 /// A borrowed handle on the shared connection. Disposing it returns the lease;
 /// disposing twice is a no-op so a `using` inside a retry loop stays safe.
 /// </summary>
-public sealed class ValorantLease(ValorantConnection owner, Initiator initiator) : IDisposable
+public sealed class ValorantLease(ValorantConnection owner, Initiator initiator, int epoch) : IDisposable
 {
     private int _disposed;
 
@@ -181,7 +240,7 @@ public sealed class ValorantLease(ValorantConnection owner, Initiator initiator)
     {
         if (Interlocked.Exchange(ref _disposed, 1) == 0)
         {
-            owner.Release();
+            owner.Release(epoch);
         }
     }
 }

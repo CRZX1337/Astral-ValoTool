@@ -234,7 +234,8 @@ body[data-booted] .tool-card {
    usually *after* the view is already on screen. Anything with travel in it
    reads as a second entrance -- as though the tool had reloaded. A short fade
    in place says "the data landed" without performing. */
-.match-row {
+.match-row,
+.lobby-row {
   animation: settle-in 220ms linear both;
   animation-delay: calc(var(--i, 0) * 12ms);
 }
@@ -309,6 +310,7 @@ body[data-booted] .tool-card {
   .view.is-entering > *,
   .agent-card.is-new,
   .match-row,
+  .lobby-row,
   .queue-chip.is-new,
   .preset-card,
   .back-btn:not([hidden]),

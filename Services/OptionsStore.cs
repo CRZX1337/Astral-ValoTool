@@ -20,7 +20,10 @@ public sealed class OptionsStore
     private readonly SemaphoreSlim _writeLock = new(1, 1);
     private AstralSettings _current;
 
-    public OptionsStore(IOptions<InstalockerOptions> instalockerDefaults, IOptions<AutoQueueOptions> autoQueueDefaults)
+    public OptionsStore(
+        IOptions<InstalockerOptions> instalockerDefaults,
+        IOptions<AutoQueueOptions> autoQueueDefaults,
+        IOptions<UpdateOptions> updateDefaults)
     {
         _path = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -30,7 +33,8 @@ public sealed class OptionsStore
         AstralSettings defaults = new()
         {
             Instalocker = instalockerDefaults.Value,
-            AutoQueue = autoQueueDefaults.Value
+            AutoQueue = autoQueueDefaults.Value,
+            Update = updateDefaults.Value
         };
 
         _current = Load(defaults, _path);
@@ -58,12 +62,62 @@ public sealed class OptionsStore
     /// <summary>Replaces one section and leaves the rest of the file alone.</summary>
     public Task ApplyInstalockerAsync(InstalockerOptions next, CancellationToken cancellationToken = default)
     {
-        return ApplyAsync(new AstralSettings { Instalocker = next, AutoQueue = Current.AutoQueue }, cancellationToken);
+        AstralSettings current = Current;
+
+        return ApplyAsync(
+            new AstralSettings
+            {
+                Instalocker = next,
+                AutoQueue = current.AutoQueue,
+                Tracker = current.Tracker,
+                Update = current.Update
+            },
+            cancellationToken);
     }
 
     public Task ApplyAutoQueueAsync(AutoQueueOptions next, CancellationToken cancellationToken = default)
     {
-        return ApplyAsync(new AstralSettings { Instalocker = Current.Instalocker, AutoQueue = next }, cancellationToken);
+        AstralSettings current = Current;
+
+        return ApplyAsync(
+            new AstralSettings
+            {
+                Instalocker = current.Instalocker,
+                AutoQueue = next,
+                Tracker = current.Tracker,
+                Update = current.Update
+            },
+            cancellationToken);
+    }
+
+    public Task ApplyTrackerAsync(TrackerOptions next, CancellationToken cancellationToken = default)
+    {
+        AstralSettings current = Current;
+
+        return ApplyAsync(
+            new AstralSettings
+            {
+                Instalocker = current.Instalocker,
+                AutoQueue = current.AutoQueue,
+                Tracker = next,
+                Update = current.Update
+            },
+            cancellationToken);
+    }
+
+    public Task ApplyUpdateAsync(UpdateOptions next, CancellationToken cancellationToken = default)
+    {
+        AstralSettings current = Current;
+
+        return ApplyAsync(
+            new AstralSettings
+            {
+                Instalocker = current.Instalocker,
+                AutoQueue = current.AutoQueue,
+                Tracker = current.Tracker,
+                Update = next
+            },
+            cancellationToken);
     }
 
     private async Task SaveAsync(AstralSettings settings, CancellationToken cancellationToken)
@@ -129,7 +183,9 @@ public sealed class OptionsStore
         }
 
         bool sectioned = document.RootElement.TryGetProperty("instalocker", out _) ||
-                         document.RootElement.TryGetProperty("autoQueue", out _);
+                         document.RootElement.TryGetProperty("autoQueue", out _) ||
+                         document.RootElement.TryGetProperty("tracker", out _) ||
+                         document.RootElement.TryGetProperty("update", out _);
 
         if (sectioned)
         {
@@ -140,7 +196,13 @@ public sealed class OptionsStore
 
         return legacy is null
             ? null
-            : new AstralSettings { Instalocker = legacy, AutoQueue = defaults.AutoQueue };
+            : new AstralSettings
+            {
+                Instalocker = legacy,
+                AutoQueue = defaults.AutoQueue,
+                Tracker = defaults.Tracker,
+                Update = defaults.Update
+            };
     }
 
     /// <summary>
@@ -152,9 +214,33 @@ public sealed class OptionsStore
     {
         InstalockerOptions instalocker = source.Instalocker ?? new InstalockerOptions();
         AutoQueueOptions autoQueue = source.AutoQueue ?? new AutoQueueOptions();
+        TrackerOptions tracker = source.Tracker ?? new TrackerOptions();
+        UpdateOptions update = source.Update ?? new UpdateOptions();
 
         return new AstralSettings
         {
+            Update = new UpdateOptions
+            {
+                // An empty repository would make every check throw, so a blank
+                // one falls back to where Astral is actually published.
+                Repository = string.IsNullOrWhiteSpace(update.Repository)
+                    ? new UpdateOptions().Repository
+                    : update.Repository.Trim().Trim('/'),
+                CheckOnStartup = update.CheckOnStartup,
+                IncludePrereleases = update.IncludePrereleases,
+                SkippedVersion = string.IsNullOrWhiteSpace(update.SkippedVersion)
+                    ? null
+                    : update.SkippedVersion.Trim()
+            },
+            Tracker = new TrackerOptions
+            {
+                // A stale anchor is dropped here rather than at every read, so
+                // the rest of the app can trust whatever it finds in the field.
+                SessionStartedAt = tracker.SessionStartedAt is { } started &&
+                                   DateTimeOffset.UtcNow - started <= TrackerOptions.MaxSessionAge
+                    ? started
+                    : null
+            },
             Instalocker = new InstalockerOptions
             {
                 HoverDelayMs = instalocker.HoverDelayMs,

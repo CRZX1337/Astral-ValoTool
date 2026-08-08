@@ -481,6 +481,157 @@
   gap: 8px;
 }
 
+/* 6. Lobby intel ========================================================= */
+
+/* Both live in the tool header, so they share the pill treatment the header
+   buttons have rather than looking like loose text next to them. */
+.intel-timer,
+.intel-count {
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.intel-timer {
+  color: var(--brand);
+  border-color: color-mix(in srgb, var(--brand) 38%, transparent);
+  background: color-mix(in srgb, var(--brand) 12%, transparent);
+}
+
+.lobby-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lobby-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 8px 12px 8px 8px;
+  border-radius: 12px;
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+/* Your own row is the one you scan for first, so it gets the accent edge. */
+.lobby-row[data-self] {
+  border-color: color-mix(in srgb, var(--brand) 42%, transparent);
+  background: color-mix(in srgb, var(--brand) 8%, transparent);
+}
+
+.lobby-portrait {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 11px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.045);
+  /* `data-role` on the row sets --accent, so the portrait picks up the agent's
+     role colour without this file knowing the roles. No pick yet means the
+     `unknown` grey, which is what an empty slot should look like anyway. */
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent, #8b93a7) 45%, transparent);
+}
+
+.lobby-portrait img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+
+.lobby-slot {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.lobby-identity {
+  min-width: 0;
+}
+
+.lobby-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.87rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Nobody chose to be shown to you here, so it reads as a state, not a name. */
+.lobby-name[data-incognito] {
+  color: var(--text-dim);
+  font-style: italic;
+  font-weight: 500;
+}
+
+.lobby-tag {
+  flex: none;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-dim);
+  font-size: 0.62rem;
+  font-weight: 600;
+  font-style: normal;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.lobby-pick {
+  margin-top: 1px;
+  color: var(--text-dim);
+  font-size: 0.74rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Locked is settled, hovering is still in play -- worth telling apart at a
+   glance, since it decides whether your own pick is still contested. */
+.lobby-row[data-pick="locked"] .lobby-pick {
+  color: #3ddc97;
+  font-weight: 600;
+}
+
+.lobby-row[data-pick="hovering"] .lobby-pick {
+  color: #f5c451;
+}
+
+.lobby-rank {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+}
+
+.lobby-rank img {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+}
+
+.lobby-tier {
+  color: var(--rank-color, var(--text-muted));
+  font-size: 0.74rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 @media (max-width: 900px) {
   .tool-grid {
     grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
@@ -498,5 +649,11 @@
   .rank-badge img {
     width: 54px;
     height: 54px;
+  }
+
+  /* The tier name is the first thing to go: the icon and the colour still say
+     what rank it is, and the names are long enough to squeeze the riot id. */
+  .lobby-tier {
+    display: none;
   }
 }

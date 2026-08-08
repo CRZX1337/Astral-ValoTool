@@ -6,7 +6,7 @@
  */
 
 import { monogram, rgba, UNKNOWN_ROLE_LABEL } from "../roles.js";
-import { availableRoles, selectAgent, setRoleFilter, setSearch, visibleAgents } from "../store.js";
+import { availableRoles, chainPosition, selectAgent, setRoleFilter, setSearch, visibleAgents } from "../store.js";
 import { stagger } from "./motion.js";
 
 const SKELETON_COUNT = 12;
@@ -68,9 +68,13 @@ export function mountAgentGrid() {
     for (const [name, card] of cards) {
       card.hidden = !visible.has(name);
 
-      const isSelected = name === state.selected;
+      // The rank badge is what makes the order legible: without it a chain of
+      // four selected cards says nothing about which one is tried first.
+      const position = chainPosition(name);
+      const isSelected = position > 0;
       card.classList.toggle("is-selected", isSelected);
       card.setAttribute("aria-selected", String(isSelected));
+      card.dataset.rank = isSelected && state.chain.length > 1 ? String(position) : "";
 
       const isTarget = Boolean(lock?.isRunning) && lock.selectedAgent === name;
       card.dataset.flag = isTarget ? (lock.isLocked ? "locked" : "target") : "";

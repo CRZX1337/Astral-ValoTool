@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Threading.Channels;
 using RadiantConnect;
 using RadiantConnect.Methods;
+using RadiantConnect.Network.PreGameEndpoints.DataTypes;
 using Astral.Models;
 
 namespace Astral.Services;
@@ -12,9 +13,16 @@ public sealed class InstalockerService : IModuleStateSource
     private static readonly IReadOnlyList<AgentOption> Agents = BuildAgents();
     private static readonly IReadOnlyList<string> MapNames = BuildMapNames();
     private static readonly IReadOnlyDictionary<string, string> MapNameLookup = BuildMapNameLookup();
+    private static readonly IReadOnlyDictionary<ValorantTables.Agent, string> AgentIds = BuildAgentIds();
 
     /// <summary>Shown when pre-game reports a map that cannot be identified at all.</summary>
     private const string UnknownMapName = "the current map";
+
+    /// <summary>
+    /// The character-selection state pre-game reports for a player who has
+    /// committed to an agent, as opposed to merely hovering it.
+    /// </summary>
+    private const string LockedSelectionState = "locked";
 
     private readonly OptionsStore _optionsStore;
     private readonly ValorantConnection _connection;
@@ -23,8 +31,14 @@ public sealed class InstalockerService : IModuleStateSource
     private CancellationTokenSource? _runCts;
     private Channel<bool>? _signalQueue;
     private Task? _worker;
-    private ValorantTables.Agent? _selectedAgent;
-    private LockState _state = NewState(false, false, null, "Waiting...", null);
+
+    /// <summary>
+    /// The fallback chain, most-wanted first. Never empty while a run is armed:
+    /// <see cref="StartOrUpdate"/> refuses a request that resolves to nothing.
+    /// </summary>
+    private List<ValorantTables.Agent> _selectedAgents = [];
+
+    private LockState _state = NewState(false, false, null, [], "Waiting...", null);
 
     /// <summary>
     /// Identifies the current run. Bumped when a worker is started and when one
@@ -93,9 +107,16 @@ public sealed class InstalockerService : IModuleStateSource
         }
     }
 
-    public bool StartOrUpdate(string agentName)
+    /// <summary>
+    /// Arms the worker with a fallback chain, most-wanted first, and starts one
+    /// if none is running. Duplicates and unresolvable names are dropped; the
+    /// request is refused only when nothing at all resolves.
+    /// </summary>
+    public bool StartOrUpdate(IReadOnlyList<string> agentNames)
     {
-        if (!TryResolveAgent(agentName, out ValorantTables.Agent agent))
+        List<ValorantTables.Agent> chain = ResolveChain(agentNames);
+
+        if (chain.Count == 0)
         {
             return false;
         }
@@ -105,8 +126,8 @@ public sealed class InstalockerService : IModuleStateSource
 
         lock (_sync)
         {
-            _selectedAgent = agent;
-            published = _state = NewState(true, false, ToDisplayName(agent), "Waiting for pre-game.", null);
+            _selectedAgents = chain;
+            published = _state = NewState(true, false, ToDisplayName(chain[0]), ToDisplayNames(chain), ArmedStatus(chain), null);
 
             if (_worker is { IsCompleted: false })
             {
@@ -138,11 +159,42 @@ public sealed class InstalockerService : IModuleStateSource
         return true;
     }
 
+    /// <summary>
+    /// The armed status doubles as the interface's "not attached yet" marker, so
+    /// a chain of one keeps the exact wording the single-agent build published.
+    /// </summary>
+    private static string ArmedStatus(IReadOnlyList<ValorantTables.Agent> chain)
+    {
+        return chain.Count > 1
+            ? $"Waiting for pre-game. Falling back through {chain.Count - 1} more."
+            : "Waiting for pre-game.";
+    }
+
+    /// <summary>
+    /// Resolves names to agents, keeping the caller's order and dropping both
+    /// unknown names and repeats -- a chain that names the same agent twice would
+    /// spend a retry re-attempting something that has already failed.
+    /// </summary>
+    private static List<ValorantTables.Agent> ResolveChain(IReadOnlyList<string> agentNames)
+    {
+        List<ValorantTables.Agent> chain = [];
+
+        foreach (string name in agentNames)
+        {
+            if (TryResolveAgent(name, out ValorantTables.Agent agent) && !chain.Contains(agent))
+            {
+                chain.Add(agent);
+            }
+        }
+
+        return chain;
+    }
+
     public void Stop(string message)
     {
         CancellationTokenSource? cts;
         Channel<bool>? signalQueue;
-        string? selectedAgent;
+        IReadOnlyList<string> chain;
         LockState published;
 
         lock (_sync)
@@ -153,11 +205,11 @@ public sealed class InstalockerService : IModuleStateSource
 
             cts = _runCts;
             signalQueue = _signalQueue;
-            selectedAgent = _selectedAgent is { } agent ? ToDisplayName(agent) : null;
+            chain = ToDisplayNames(_selectedAgents);
             _runCts = null;
             _signalQueue = null;
             _worker = null;
-            published = _state = NewState(false, false, selectedAgent, message, null);
+            published = _state = NewState(false, false, chain.FirstOrDefault(), chain, message, null);
         }
 
         signalQueue?.Writer.TryComplete();
@@ -239,32 +291,73 @@ public sealed class InstalockerService : IModuleStateSource
             return;
         }
 
-        // The map decides which agent is used, so it has to be resolved first --
-        // otherwise every status line would name the grid selection while a
-        // different agent is actually locked.
+        // The map decides which agent is tried first, so it has to be resolved
+        // before anything is published -- otherwise every status line would name
+        // the grid selection while a different agent is actually being locked.
         InstalockerOptions options = _optionsStore.Current.Instalocker;
         string mapName = ResolveMapName(match.MapId);
-        ValorantTables.Agent agent = ResolveAgentForMap(mapName, options);
-        string agentName = ToDisplayName(agent);
+        List<ValorantTables.Agent> chain = BuildChainForMap(mapName, options);
 
         if (seenMatches.Contains(match.Id))
         {
-            UpdateStatus(generation, $"Locked {agentName}. Monitoring for the next match.");
+            UpdateStatus(generation, "Monitoring for the next match.");
             return;
         }
-
-        UpdateStatus(generation, $"Selecting {agentName} on {mapName}.");
 
         if (options.HoverDelayMs > 0)
         {
             await Task.Delay(options.HoverDelayMs, cancellationToken).ConfigureAwait(false);
         }
 
-        // Stop has to mean stop: neither client call takes a token, and with the
-        // default delays of 0 there is no awaited gap between them to cancel at.
-        // Checking on each boundary is what keeps an agent from being taken
-        // after the user has already asked to stop.
-        cancellationToken.ThrowIfCancellationRequested();
+        for (int index = 0; index < chain.Count; index++)
+        {
+            ValorantTables.Agent agent = chain[index];
+            string agentName = ToDisplayName(agent);
+
+            UpdateStatus(generation, AttemptStatus(agentName, mapName, index, chain.Count));
+
+            // Stop has to mean stop: neither client call takes a token, and with
+            // the default delays of 0 there is no awaited gap between them to
+            // cancel at. Checking on each boundary is what keeps an agent from
+            // being taken after the user has already asked to stop.
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (await TryTakeAsync(initiator, agent, options, cancellationToken).ConfigureAwait(false))
+            {
+                seenMatches.Add(match.Id);
+                MarkLocked(generation, agentName, mapName);
+
+                if (options.PostLockDelayMs > 0)
+                {
+                    await Task.Delay(options.PostLockDelayMs, cancellationToken).ConfigureAwait(false);
+                }
+
+                UpdateStatus(generation, $"Locked {agentName}. Monitoring for the next match.");
+                return;
+            }
+        }
+
+        // Every candidate was taken. The match is recorded anyway: retrying the
+        // same exhausted chain on the next pre-game signal would just replay the
+        // whole sequence of failures a second or two later.
+        seenMatches.Add(match.Id);
+        UpdateStatus(generation, ExhaustedStatus(chain, mapName));
+    }
+
+    /// <summary>
+    /// Hovers, locks, then reads back what pre-game thinks this account has.
+    ///
+    /// Neither client call reports failure -- an agent somebody else already took
+    /// is accepted and quietly does nothing -- so the returned match is the only
+    /// honest answer about whether the lock actually landed. Guessing instead
+    /// would have the chain stop at its first candidate every time.
+    /// </summary>
+    private static async Task<bool> TryTakeAsync(
+        Initiator initiator,
+        ValorantTables.Agent agent,
+        InstalockerOptions options,
+        CancellationToken cancellationToken)
+    {
         await initiator.Endpoints.PreGameEndpoints.SelectCharacterAsync(agent).ConfigureAwait(false);
 
         if (options.LockDelayMs > 0)
@@ -273,32 +366,80 @@ public sealed class InstalockerService : IModuleStateSource
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        await initiator.Endpoints.PreGameEndpoints.LockCharacterAsync(agent).ConfigureAwait(false);
-        seenMatches.Add(match.Id);
-        MarkLocked(generation, agentName, mapName);
+        var locked = await initiator.Endpoints.PreGameEndpoints.LockCharacterAsync(agent).ConfigureAwait(false);
 
-        if (options.PostLockDelayMs > 0)
-        {
-            await Task.Delay(options.PostLockDelayMs, cancellationToken).ConfigureAwait(false);
-        }
-
-        UpdateStatus(generation, $"Locked {agentName}. Monitoring for the next match.");
+        return HasLocked(locked, agent);
     }
 
     /// <summary>
-    /// An override for the current map wins over the grid selection. An override
-    /// naming an agent this build does not know falls back to the selection
-    /// instead of throwing mid pre-game.
+    /// True when the match says this account is locked onto <paramref name="agent"/>.
+    ///
+    /// The player is found by selection state rather than by puuid: pre-game
+    /// hides ally identities behind <c>Incognito</c>, but only one player on the
+    /// team can hold a given character, so a locked entry carrying that
+    /// character id is proof enough that the request went through.
     /// </summary>
-    private ValorantTables.Agent ResolveAgentForMap(string mapName, InstalockerOptions options)
+    private static bool HasLocked(PreGameMatch? match, ValorantTables.Agent agent)
     {
+        if (match?.AllyTeam?.Players is not { } players || !AgentIds.TryGetValue(agent, out string? agentId))
+        {
+            // Nothing came back, or this build has no uuid for the agent. Treated
+            // as failure so the chain moves on rather than reporting a lock it
+            // cannot actually confirm.
+            return false;
+        }
+
+        foreach (Player player in players)
+        {
+            if (string.Equals(player.CharacterId, agentId, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(player.CharacterSelectionState, LockedSelectionState, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string AttemptStatus(string agentName, string mapName, int index, int total)
+    {
+        if (total == 1)
+        {
+            return $"Selecting {agentName} on {mapName}.";
+        }
+
+        return index == 0
+            ? $"Selecting {agentName} on {mapName}."
+            : $"{agentName} next -- fallback {index} of {total - 1} on {mapName}.";
+    }
+
+    private static string ExhaustedStatus(IReadOnlyList<ValorantTables.Agent> chain, string mapName)
+    {
+        return chain.Count == 1
+            ? $"{ToDisplayName(chain[0])} was already taken on {mapName}. Monitoring for the next match."
+            : $"All {chain.Count} choices were taken on {mapName}. Monitoring for the next match.";
+    }
+
+    /// <summary>
+    /// An override for the current map is tried first, then the rest of the
+    /// chain. Pushing the override in front rather than replacing the chain is
+    /// what makes an override recoverable: the fallbacks still apply when
+    /// somebody else has the overridden agent.
+    /// </summary>
+    private List<ValorantTables.Agent> BuildChainForMap(string mapName, InstalockerOptions options)
+    {
+        List<ValorantTables.Agent> chain = GetSelectedAgents();
+
+        // An override naming an agent this build does not know is ignored rather
+        // than throwing mid pre-game.
         if (options.MapAgentOverrides.TryGetValue(mapName, out string? overrideName) &&
             TryResolveAgent(overrideName, out ValorantTables.Agent overrideAgent))
         {
-            return overrideAgent;
+            chain.Remove(overrideAgent);
+            chain.Insert(0, overrideAgent);
         }
 
-        return GetSelectedAgent();
+        return chain;
     }
 
     private void UpdateStatus(int generation, string status)
@@ -312,8 +453,8 @@ public sealed class InstalockerService : IModuleStateSource
                 return;
             }
 
-            string? selectedAgent = _selectedAgent is { } agent ? ToDisplayName(agent) : null;
-            published = _state = NewState(true, false, selectedAgent, status, null);
+            IReadOnlyList<string> chain = ToDisplayNames(_selectedAgents);
+            published = _state = NewState(true, false, chain.FirstOrDefault(), chain, status, null);
         }
 
         Publish(published);
@@ -330,7 +471,15 @@ public sealed class InstalockerService : IModuleStateSource
                 return;
             }
 
-            published = _state = NewState(true, true, agentName, $"{agentName} selected and locked on {mapName}.", null);
+            // SelectedAgent narrows to whoever was actually taken, which is not
+            // necessarily the head of the chain once a fallback has been used.
+            published = _state = NewState(
+                true,
+                true,
+                agentName,
+                ToDisplayNames(_selectedAgents),
+                $"{agentName} selected and locked on {mapName}.",
+                null);
         }
 
         Publish(published);
@@ -356,8 +505,8 @@ public sealed class InstalockerService : IModuleStateSource
             _runCts = null;
             _signalQueue = null;
             _worker = null;
-            string? selectedAgent = _selectedAgent is { } agent ? ToDisplayName(agent) : null;
-            published = _state = NewState(false, false, selectedAgent, "Idle.", error);
+            IReadOnlyList<string> chain = ToDisplayNames(_selectedAgents);
+            published = _state = NewState(false, false, chain.FirstOrDefault(), chain, "Idle.", error);
         }
 
         Publish(published);
@@ -389,12 +538,21 @@ public sealed class InstalockerService : IModuleStateSource
         }
     }
 
-    private ValorantTables.Agent GetSelectedAgent()
+    /// <summary>
+    /// A private copy, so the caller can reorder it for a map override without
+    /// mutating the armed chain.
+    /// </summary>
+    private List<ValorantTables.Agent> GetSelectedAgents()
     {
         lock (_sync)
         {
-            return _selectedAgent ?? ValorantTables.Agent.Jett;
+            return _selectedAgents.Count > 0 ? [.. _selectedAgents] : [ValorantTables.Agent.Jett];
         }
+    }
+
+    private static IReadOnlyList<string> ToDisplayNames(IReadOnlyList<ValorantTables.Agent> chain)
+    {
+        return [.. chain.Select(ToDisplayName)];
     }
 
     private static bool TryResolveAgent(string input, out ValorantTables.Agent agent)
@@ -513,6 +671,28 @@ public sealed class InstalockerService : IModuleStateSource
         return lookup;
     }
 
+    /// <summary>
+    /// Agent to character uuid, which is how pre-game identifies a pick.
+    ///
+    /// Taken from RadiantConnect's own table rather than re-typed, and tolerant
+    /// of a missing entry: a build whose enum has an agent the table does not is
+    /// a chain that skips it, not a crash on the first lock.
+    /// </summary>
+    private static IReadOnlyDictionary<ValorantTables.Agent, string> BuildAgentIds()
+    {
+        Dictionary<ValorantTables.Agent, string> ids = [];
+
+        foreach ((ValorantTables.Agent agent, string id) in ValorantTables.AgentToId)
+        {
+            if (!string.IsNullOrWhiteSpace(id))
+            {
+                ids[agent] = id;
+            }
+        }
+
+        return ids;
+    }
+
     private static string ToDisplayName(ValorantTables.Agent agent)
     {
         return agent switch
@@ -536,8 +716,14 @@ public sealed class InstalockerService : IModuleStateSource
             .ToArray());
     }
 
-    private static LockState NewState(bool isRunning, bool isLocked, string? selectedAgent, string status, string? error)
+    private static LockState NewState(
+        bool isRunning,
+        bool isLocked,
+        string? selectedAgent,
+        IReadOnlyList<string> selectedAgents,
+        string status,
+        string? error)
     {
-        return new LockState(isRunning, isLocked, selectedAgent, status, error, DateTimeOffset.UtcNow);
+        return new LockState(isRunning, isLocked, selectedAgent, selectedAgents, status, error, DateTimeOffset.UtcNow);
     }
 }

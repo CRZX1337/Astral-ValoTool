@@ -25,6 +25,8 @@ It's one C# app: an embedded ASP.NET Core Web API behind a native WebView2 windo
 | **Instalock** | Detects pre-game and locks your agent, with per-map overrides and adjustable timing |
 | **Rank tracker** | Current rank and RR, session wins/losses and net RR, and per-match RR deltas |
 | **Auto-queue** | Requeues after a match and picks the queue |
+| **Lobby intel** | Your own team's agent picks and ranks during agent select |
+| **Auto-updater** | Watches this repo's releases and installs a new build on request |
 
 ---
 
@@ -35,6 +37,8 @@ It's one C# app: an embedded ASP.NET Core Web API behind a native WebView2 windo
 - ⏱️ Hover, lock, and post-lock delays in milliseconds if you want the pick to look less instant.
 - 📊 Rank and session tracking that refreshes on demand rather than polling Riot on a timer.
 - 🔁 Auto-queue with real guard rails: it will not queue during a match, and it stops itself after a configurable number of requeues in a row.
+- 👥 Lobby intel: while you're in agent select, see who else is on your team, what rank they are, and whether each pick is hovered or locked. It reads the pre-game payload your own client already received — nothing is looked up against another account, and anyone playing incognito stays unnamed.
+- 🔄 Auto-updater: a banner appears when this repo publishes a newer release. Downloading it takes a click, installing it takes another — nothing is fetched or replaced behind your back. "Skip" silences one version without opting out of the next.
 - 📡 Server-Sent Events on `/api/events`, one stream carrying every tool's state.
 - 🔔 Closing the window sends Astral to the system tray. Running loops keep going.
 - 🖼️ Agent portraits, role icons and rank badges are fetched from `valorant-api.com` at runtime.
@@ -127,7 +131,7 @@ web page you happen to have open can't drive your lock loop. Scripts don't send 
 | `GET /api/state` | Current lock state |
 | `GET /api/state/stream` | The same state pushed on every change (SSE) |
 | `GET /api/events` | Every tool's state pushed on every change, tagged by module (SSE) |
-| `POST /api/lock` | Start monitoring, or re-aim a running loop at another agent |
+| `POST /api/lock` | Start monitoring, or re-aim a running loop at another chain |
 | `POST /api/stop` | Stop monitoring |
 | `GET /api/options` | Settings plus the list of maps they can refer to |
 | `PATCH /api/options` | Partial settings update, validated and persisted |
@@ -138,8 +142,25 @@ web page you happen to have open can't drive your lock loop. Scripts don't send 
 | `POST /api/autoqueue/start` · `/stop` | Run or stop the automation loop |
 | `POST /api/autoqueue/queueing` | Enter or leave the queue right now |
 | `GET`/`PATCH /api/autoqueue/options` | Auto-queue settings and the queue list |
+| `GET /api/intel` | Current pre-game lobby snapshot |
+| `POST /api/intel/watch` | Start or stop watching agent select |
 
-#### Start, or switch target agent
+#### Start, or switch the fallback chain
+```http
+POST /api/lock
+Content-Type: application/json
+
+{
+  "agents": ["Jett", "Raze", "Neon"]
+}
+```
+
+Agents are tried in order: the first one still free when pre-game opens is the
+one that gets locked. Each attempt is confirmed against what pre-game reports
+back, so a candidate somebody else already took falls through to the next
+instead of being reported as a lock.
+
+The original single-agent body still works and means a chain of one:
 ```http
 POST /api/lock
 Content-Type: application/json
@@ -165,7 +186,8 @@ You get back:
   "isRunning": true,
   "isLocked": false,
   "selectedAgent": "Jett",
-  "status": "Waiting for pre-game.",
+  "selectedAgents": ["Jett", "Raze", "Neon"],
+  "status": "Waiting for pre-game. Falling back through 2 more.",
   "error": null,
   "updatedAt": "2026-07-29T15:44:03.7543142+00:00"
 }
@@ -173,6 +195,9 @@ You get back:
 
 `isRunning` tells you the monitoring loop is active. `isLocked` is only true for the short window
 after a successful lock, for as long as the *Show Locked for* setting holds it there.
+`selectedAgents` is the whole chain; `selectedAgent` is its head while merely armed, and the agent
+that was actually taken once `isLocked` is true — which is not necessarily the head, if a fallback
+was used.
 
 #### Live stream
 ```http
@@ -195,6 +220,94 @@ Content-Type: application/json
   }
 }
 ```
+
+#### Lobby intel
+
+The watch holds a connection to your client, so it's opt-in rather than always on:
+```http
+POST /api/intel/watch
+Content-Type: application/json
+
+{
+  "watching": true
+}
+```
+
+While it's on, the roster is pushed over `/api/events` as it changes. `GET /api/intel`
+returns the same snapshot on demand:
+```json
+{
+  "isWatching": true,
+  "isActive": true,
+  "mapName": "Ascent",
+  "players": [
+    {
+      "slot": 1,
+      "isSelf": true,
+      "isCaptain": true,
+      "name": "You#EUW",
+      "isIncognito": false,
+      "agentName": "Neon",
+      "pickState": "Locked",
+      "tier": 21,
+      "tierName": "Diamond 1"
+    }
+  ],
+  "lockedCount": 1,
+  "secondsRemaining": 41.3,
+  "status": "Agent select on Ascent. 1 of 5 locked.",
+  "error": null,
+  "updatedAt": "2026-08-08T15:44:03.7543142+00:00"
+}
+```
+
+`isActive` separates "there is no pre-game right now" from "we couldn't read it",
+which is what `error` is for. `pickState` is `None`, `Hovering` or `Locked`.
+Players with `isIncognito` come back with a null `name` — Astral doesn't resolve
+names for people who asked not to be named.
+
+#### Updater
+
+Each step is its own call, because none of them should happen without asking:
+```http
+GET  /api/update           # last known state, no network call
+POST /api/update/check     # ask GitHub what the newest release is
+POST /api/update/download  # returns immediately; progress arrives on /api/events
+POST /api/update/cancel    # abandon a download in flight
+POST /api/update/apply     # replace the binary and restart into it
+POST /api/update/skip      # {"version": "1.3.0"} — never offer this one again
+```
+
+`GET /api/update` returns:
+```json
+{
+  "stage": "Available",
+  "currentVersion": "1.2.0",
+  "latestVersion": "1.3.0",
+  "isUpdateAvailable": true,
+  "releaseName": "Astral 1.3.0",
+  "releaseNotes": "…",
+  "releaseUrl": "https://github.com/CRZX1337/Astral-ValoTool/releases/tag/v1.3.0",
+  "downloadSize": 62400000,
+  "downloadedBytes": 0,
+  "progress": null,
+  "publishedAt": "2026-08-08T12:00:00+00:00",
+  "isPrerelease": false,
+  "status": "Version 1.3.0 is available.",
+  "error": null,
+  "checkedAt": "2026-08-08T12:04:11.221+00:00"
+}
+```
+
+`stage` walks `Idle` → `Checking` → `UpToDate` | `Available` → `Downloading` →
+`Ready` → `Restarting`, with `Failed` reachable from any of them and `error`
+carrying the reason. `progress` is null until a download reports a total size.
+
+`apply` renames the running executable to `<exe>.old`, copies the new one into
+its place, launches it and closes this window; the leftover is swept on the next
+start. If the copy fails the old binary is moved back, so a failed update never
+leaves you without a working Astral. Releases that ship as an archive rather than
+an `.exe` are downloaded but not installed — the banner says so.
 
 ---
 
@@ -233,6 +346,28 @@ write it to `%APPDATA%\Astral\settings.json`:
   }
 }
 ```
+
+### Updater
+
+```json
+{
+  "Update": {
+    "Repository": "CRZX1337/Astral-ValoTool",
+    "CheckOnStartup": true,
+    "IncludePrereleases": false
+  }
+}
+```
+
+| Parameter | Type | Description |
+|---|---|---|
+| `Repository` | string | `owner/repo` to watch. A blank value falls back to the default rather than failing every check. |
+| `CheckOnStartup` | boolean | Check once, six seconds after launch. Turn it off and only manual checks run. |
+| `IncludePrereleases` | boolean | Whether a prerelease counts as an update. Off by default. |
+| `SkippedVersion` | string | Set by the banner's "Skip". That one version stays silent; later ones don't. |
+
+The check is an unauthenticated call to the public releases API, so it's subject
+to GitHub's rate limit for anonymous requests. Nothing is sent with it.
 
 ---
 

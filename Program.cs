@@ -45,17 +45,23 @@ internal static class Program
             builder.Configuration.GetSection(InstalockerOptions.SectionName));
         builder.Services.Configure<AutoQueueOptions>(
             builder.Configuration.GetSection(AutoQueueOptions.SectionName));
+        builder.Services.Configure<UpdateOptions>(
+            builder.Configuration.GetSection(UpdateOptions.SectionName));
         builder.Services.AddSingleton<ValorantConnection>();
         builder.Services.AddSingleton<OptionsStore>();
         builder.Services.AddSingleton<InstalockerService>();
         builder.Services.AddSingleton<RankTrackerService>();
         builder.Services.AddSingleton<AutoQueueService>();
+        builder.Services.AddSingleton<PreGameIntelService>();
+        builder.Services.AddSingleton<UpdateService>();
 
         // Each tool is resolvable both by its own type (routes want the real
         // thing) and as a stream source (/api/events wants them all).
         builder.Services.AddSingleton<IModuleStateSource>(sp => sp.GetRequiredService<InstalockerService>());
         builder.Services.AddSingleton<IModuleStateSource>(sp => sp.GetRequiredService<RankTrackerService>());
         builder.Services.AddSingleton<IModuleStateSource>(sp => sp.GetRequiredService<AutoQueueService>());
+        builder.Services.AddSingleton<IModuleStateSource>(sp => sp.GetRequiredService<PreGameIntelService>());
+        builder.Services.AddSingleton<IModuleStateSource>(sp => sp.GetRequiredService<UpdateService>());
 
         // Singleton, not AddHttpClient<T>: a typed client is registered
         // transient, which would give every request its own instance and throw
@@ -125,14 +131,16 @@ internal static class Program
             LockRequest request,
             InstalockerService service) =>
         {
-            if (string.IsNullOrWhiteSpace(request.Agent))
+            IReadOnlyList<string> chain = request.Chain;
+
+            if (chain.Count == 0)
             {
-                return TypedResults.BadRequest(new ErrorResponse("An agent name is required."));
+                return TypedResults.BadRequest(new ErrorResponse("At least one agent name is required."));
             }
 
-            return service.StartOrUpdate(request.Agent)
+            return service.StartOrUpdate(chain)
                 ? TypedResults.Ok(service.GetState())
-                : TypedResults.BadRequest(new ErrorResponse("Unknown agent name."));
+                : TypedResults.BadRequest(new ErrorResponse("No agent name could be recognised."));
         }).AddEndpointFilter(RejectForeignOrigin);
         app.MapPost("/api/stop", (InstalockerService service) =>
         {
@@ -146,9 +154,9 @@ internal static class Program
             await tracker.RefreshAsync(cancellationToken);
             return TypedResults.Ok(tracker.GetState());
         }).AddEndpointFilter(RejectForeignOrigin);
-        app.MapPost("/api/tracker/session/reset", (RankTrackerService tracker) =>
+        app.MapPost("/api/tracker/session/reset", async (RankTrackerService tracker, CancellationToken cancellationToken) =>
         {
-            tracker.ResetSession();
+            await tracker.ResetSessionAsync(cancellationToken);
             return TypedResults.Ok(tracker.GetState());
         }).AddEndpointFilter(RejectForeignOrigin);
 
@@ -172,6 +180,67 @@ internal static class Program
             CancellationToken cancellationToken) =>
             TypedResults.Ok(await queue.SetQueueingAsync(request.Queueing, cancellationToken)))
             .AddEndpointFilter(RejectForeignOrigin);
+
+        app.MapGet("/api/intel", (PreGameIntelService intel) => TypedResults.Ok(intel.GetState()));
+
+        // The watch is a toggle rather than a start/stop pair because the
+        // interface drives it from a view being open, which is one bit of state.
+        app.MapPost("/api/intel/watch", (WatchRequest request, PreGameIntelService intel) =>
+        {
+            if (request.Watching)
+            {
+                intel.StartWatching();
+            }
+            else
+            {
+                intel.StopWatching();
+            }
+
+            return TypedResults.Ok(intel.GetState());
+        }).AddEndpointFilter(RejectForeignOrigin);
+
+        app.MapGet("/api/update", (UpdateService updater) => TypedResults.Ok(updater.GetState()));
+
+        app.MapPost("/api/update/check", async (UpdateService updater, CancellationToken cancellationToken) =>
+        {
+            await updater.CheckAsync(cancellationToken);
+            return TypedResults.Ok(updater.GetState());
+        }).AddEndpointFilter(RejectForeignOrigin);
+
+        // Returns as soon as the download starts rather than when it finishes:
+        // a large release would otherwise sit on the request past any sane
+        // client timeout, and progress is on /api/events anyway.
+        app.MapPost("/api/update/download", (UpdateService updater) =>
+        {
+            _ = updater.DownloadAsync(CancellationToken.None);
+            return TypedResults.Ok(updater.GetState());
+        }).AddEndpointFilter(RejectForeignOrigin);
+
+        app.MapPost("/api/update/cancel", (UpdateService updater) =>
+        {
+            updater.CancelDownload();
+            return TypedResults.Ok(updater.GetState());
+        }).AddEndpointFilter(RejectForeignOrigin);
+
+        app.MapPost("/api/update/apply", Results<Ok<UpdateState>, BadRequest<ErrorResponse>> (UpdateService updater) =>
+        {
+            if (!updater.Apply())
+            {
+                return TypedResults.BadRequest(
+                    new ErrorResponse(updater.GetState().Error ?? "No downloaded update is ready to apply."));
+            }
+
+            return TypedResults.Ok(updater.GetState());
+        }).AddEndpointFilter(RejectForeignOrigin);
+
+        app.MapPost("/api/update/skip", async (
+            SkipUpdateRequest request,
+            UpdateService updater,
+            CancellationToken cancellationToken) =>
+        {
+            await updater.SkipAsync(request.Version, cancellationToken);
+            return TypedResults.Ok(updater.GetState());
+        }).AddEndpointFilter(RejectForeignOrigin);
 
         app.MapGet("/api/autoqueue/options", (OptionsStore store) =>
             TypedResults.Ok(ToAutoQueueResponse(store.Current.AutoQueue)));
@@ -305,7 +374,13 @@ internal static class Program
 
         try
         {
-            await RunDesktopWindowAsync(url, app.Services.GetRequiredService<InstalockerService>());
+            UpdateService updater = app.Services.GetRequiredService<UpdateService>();
+            updater.ScheduleStartupCheck();
+
+            await RunDesktopWindowAsync(
+                url,
+                app.Services.GetRequiredService<InstalockerService>(),
+                updater);
         }
         finally
         {
@@ -516,7 +591,7 @@ internal static class Program
         return true;
     }
 
-    private static Task RunDesktopWindowAsync(string url, InstalockerService service)
+    private static Task RunDesktopWindowAsync(string url, InstalockerService service, UpdateService updater)
     {
         TaskCompletionSource completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -525,7 +600,7 @@ internal static class Program
             try
             {
                 ApplicationConfiguration.Initialize();
-                using var form = new DesktopAppForm(url, service);
+                using var form = new DesktopAppForm(url, service, updater);
                 form.FormClosed += (_, _) => completion.TrySetResult();
                 Application.Run(form);
                 completion.TrySetResult();

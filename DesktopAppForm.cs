@@ -16,6 +16,7 @@ public sealed class DesktopAppForm : Form
 
     private readonly string _url;
     private readonly InstalockerService _service;
+    private readonly UpdateService _updater;
     private readonly Icon? _appIcon = LoadAppIcon();
     private readonly NotifyIcon _tray;
 
@@ -38,10 +39,11 @@ public sealed class DesktopAppForm : Form
     private bool _exitRequested;
     private bool _announcedTray;
 
-    public DesktopAppForm(string url, InstalockerService service)
+    public DesktopAppForm(string url, InstalockerService service, UpdateService updater)
     {
         _url = url;
         _service = service;
+        _updater = updater;
         Text = "Astral";
 
         if (_appIcon is not null)
@@ -60,6 +62,7 @@ public sealed class DesktopAppForm : Form
         _tray = CreateTray();
         ApplyTrayState(_service.GetState());
         _service.StateChanged += OnServiceStateChanged;
+        _updater.RestartRequested += OnRestartRequested;
 
         Controls.Add(_webView);
         Shown += async (_, _) =>
@@ -91,6 +94,7 @@ public sealed class DesktopAppForm : Form
         if (disposing)
         {
             _service.StateChanged -= OnServiceStateChanged;
+            _updater.RestartRequested -= OnRestartRequested;
 
             // Hide before disposing: an icon that is only removed on dispose can
             // linger in the notification area until the pointer passes over it.
@@ -174,6 +178,22 @@ public sealed class DesktopAppForm : Form
         }
 
         BeginInvoke(() => ApplyTrayState(state));
+    }
+
+    /// <summary>
+    /// The updater has already swapped the binary and launched the replacement,
+    /// so this window has to go -- including out of the tray, which normally
+    /// survives a close. Two copies of Astral fighting over the same client is
+    /// exactly what the restart is meant to avoid.
+    /// </summary>
+    private void OnRestartRequested()
+    {
+        if (IsDisposed || !IsHandleCreated)
+        {
+            return;
+        }
+
+        BeginInvoke(ExitApplication);
     }
 
     private void ApplyTrayState(LockState state)

@@ -7,11 +7,16 @@
 
 import {
   ApiError,
+  applyUpdate,
+  cancelUpdateDownload,
+  checkForUpdate,
+  downloadUpdate,
   fetchAgents,
   fetchAutoQueue,
   fetchAutoQueueOptions,
   fetchOptions,
   fetchTracker,
+  fetchUpdate,
   patchAutoQueueOptions,
   patchOptions,
   refreshAutoQueue,
@@ -19,14 +24,16 @@ import {
   requestLock,
   requestStop,
   resetTrackerSession,
+  setIntelWatching,
   setQueueing,
+  skipUpdate,
   startAutoQueue,
   stopAutoQueue
 } from "./api.js";
 import { sortRoles } from "./roles.js";
 
 /** Views the shell can show. `home` is the launcher; the rest are tools. */
-export const VIEWS = ["home", "instalock", "tracker", "autoqueue"];
+export const VIEWS = ["home", "instalock", "tracker", "autoqueue", "intel"];
 
 /**
  * How long to let a view transition settle before a tool fetches anything.
@@ -62,6 +69,9 @@ const state = {
   roleFilter: "all",
   selected: null,
 
+  /** Agents to try, in order. `selected` mirrors the head of it. */
+  chain: [],
+
   lock: null,
   hydrated: false,
   connected: true,
@@ -84,7 +94,19 @@ const state = {
   autoqueue: null,
   queueOptions: null,
   queuePending: false,
-  queueSaveNote: ""
+  queueSaveNote: "",
+
+  // --- pre-game intel ---
+  // The watch is only on while the view is open, so this is not persisted.
+  intel: null,
+  intelPending: false,
+
+  // --- updater ---
+  // `updateDismissed` is this run only: the banner comes back on relaunch
+  // unless the version was actually skipped, which is server-side.
+  update: null,
+  updatePending: false,
+  updateDismissed: false
 };
 
 let savedNoticeTimer = null;
@@ -156,12 +178,25 @@ export function errorMessage() {
   return state.actionError ?? state.lock?.error ?? null;
 }
 
-/** True once the running worker is aimed at somebody other than the selection. */
+/** Where an agent sits in the chain, 1-based, or 0 when it is not in it. */
+export function chainPosition(name) {
+  return state.chain.indexOf(name) + 1;
+}
+
+/** The chain as agent records, in order, skipping anything the grid lacks. */
+export function chainAgents() {
+  return state.chain
+    .map((name) => state.agents.find((agent) => agent.name === name) ?? { name, gradient: [] });
+}
+
+/** True once the running worker is armed with a chain other than the current one. */
 export function isRetargeting() {
+  const armed = state.lock?.selectedAgents ?? (state.lock?.selectedAgent ? [state.lock.selectedAgent] : []);
+
   return Boolean(
     state.lock?.isRunning &&
-    state.selected &&
-    state.selected !== state.lock.selectedAgent
+    state.chain.length > 0 &&
+    (armed.length !== state.chain.length || armed.some((name, at) => name !== state.chain[at]))
   );
 }
 
@@ -199,9 +234,18 @@ export function setView(view) {
     return;
   }
 
+  const previous = state.view;
+
   state.view = view;
   state.actionError = null;
   emit();
+
+  // Leaving the lobby view ends the watch straight away rather than after the
+  // settle delay: it holds a connection lease, and nothing is rendering it any
+  // more. Not deferred, because the answer cannot change on the way out.
+  if (previous === "intel") {
+    void watchLobby(false);
+  }
 
   // Deferred so the fetch cannot land while the view is still animating in.
   // Re-checked on the way out: by then the user may have gone somewhere else.
@@ -212,6 +256,10 @@ export function setView(view) {
 
     if (view === "tracker" && !state.tracker?.updatedAt && !state.trackerPending) {
       void refreshTrackerState();
+    }
+
+    if (view === "intel") {
+      void watchLobby(true);
     }
 
     if (view === "autoqueue") {
@@ -245,12 +293,176 @@ export function applyModuleState(module, moduleState) {
     case "autoqueue":
       state.autoqueue = moduleState;
       break;
+    case "intel":
+      state.intel = moduleState;
+      break;
+    case "update":
+      state.update = moduleState;
+      break;
     default:
       return;
   }
 
   state.connected = true;
   emit();
+}
+
+// --- updater -----------------------------------------------------------
+
+/** True when there is something worth putting a banner on screen for. */
+export function updateBannerVisible() {
+  const update = state.update;
+
+  if (!update || state.updateDismissed) {
+    return false;
+  }
+
+  return update.isUpdateAvailable ||
+    update.stage === "Downloading" ||
+    update.stage === "Ready" ||
+    update.stage === "Restarting";
+}
+
+/** Hides the banner for this run only. Skipping a version is a separate action. */
+export function dismissUpdate() {
+  state.updateDismissed = true;
+  emit();
+}
+
+export async function loadUpdate() {
+  try {
+    state.update = await fetchUpdate();
+  } catch {
+    // Not having checked yet is a valid starting state.
+  } finally {
+    emit();
+  }
+}
+
+export async function runUpdateCheck() {
+  if (state.updatePending) {
+    return;
+  }
+
+  state.updatePending = true;
+  state.updateDismissed = false;
+  emit();
+
+  try {
+    state.update = await checkForUpdate();
+  } catch (error) {
+    state.update = {
+      ...(state.update ?? {}),
+      error: error instanceof ApiError ? error.message : "Could not check for updates."
+    };
+  } finally {
+    state.updatePending = false;
+    emit();
+  }
+}
+
+/**
+ * Starts the download. The response is the state at the moment it began, not
+ * at the end -- progress arrives over the event stream from here on.
+ */
+export async function startUpdateDownload() {
+  if (state.updatePending) {
+    return;
+  }
+
+  state.updatePending = true;
+  emit();
+
+  try {
+    state.update = await downloadUpdate();
+  } catch (error) {
+    state.update = {
+      ...(state.update ?? {}),
+      error: error instanceof ApiError ? error.message : "Could not start the download."
+    };
+  } finally {
+    state.updatePending = false;
+    emit();
+  }
+}
+
+export async function cancelUpdate() {
+  try {
+    state.update = await cancelUpdateDownload();
+  } catch {
+    // The stream corrects us if it landed anyway.
+  } finally {
+    emit();
+  }
+}
+
+/**
+ * Swaps the binary and restarts. On success the app is already on its way out,
+ * so there is deliberately nothing to render afterwards.
+ */
+export async function installUpdate() {
+  if (state.updatePending) {
+    return;
+  }
+
+  state.updatePending = true;
+  emit();
+
+  try {
+    state.update = await applyUpdate();
+  } catch (error) {
+    state.update = {
+      ...(state.update ?? {}),
+      error: error instanceof ApiError ? error.message : "Could not apply the update."
+    };
+  } finally {
+    state.updatePending = false;
+    emit();
+  }
+}
+
+/** Silences one version for good, rather than just for this run. */
+export async function skipUpdateVersion() {
+  const version = state.update?.latestVersion ?? null;
+
+  state.updateDismissed = true;
+  emit();
+
+  try {
+    state.update = await skipUpdate(version);
+  } catch {
+    // Dismissed locally regardless; the banner is already gone.
+  } finally {
+    emit();
+  }
+}
+
+// --- pre-game intel ----------------------------------------------------
+
+/**
+ * Turns the lobby watch on or off. The server pushes the roster over
+ * /api/events from then on, so this is the only request the view makes.
+ */
+export async function watchLobby(watching) {
+  if (state.intelPending) {
+    return;
+  }
+
+  state.intelPending = true;
+  emit();
+
+  try {
+    state.intel = await setIntelWatching(watching);
+  } catch (error) {
+    state.intel = {
+      ...(state.intel ?? {}),
+      isWatching: false,
+      error: error instanceof ApiError ? error.message : "Could not read the lobby."
+    };
+  } finally {
+    state.intelPending = false;
+    emit();
+  }
 }
 
 // --- tracker -----------------------------------------------------------
@@ -412,23 +624,80 @@ export function setRoleFilter(role) {
   emit();
 }
 
+/**
+ * Adds an agent to the fallback chain, or takes it back out if it is already
+ * there. Clicking builds the order: first click is the first choice.
+ */
 export function selectAgent(name) {
-  state.selected = name;
+  const at = state.chain.indexOf(name);
+
+  if (at === -1) {
+    state.chain.push(name);
+  } else {
+    state.chain.splice(at, 1);
+  }
+
+  syncSelected();
   state.actionError = null;
   emit();
+}
+
+/** Drops one agent out of the chain, regardless of how it got in. */
+export function removeFromChain(name) {
+  const at = state.chain.indexOf(name);
+
+  if (at === -1) {
+    return;
+  }
+
+  state.chain.splice(at, 1);
+  syncSelected();
+  state.actionError = null;
+  emit();
+}
+
+/** Moves an agent one place up or down the order of preference. */
+export function moveInChain(name, delta) {
+  const at = state.chain.indexOf(name);
+  const to = at + delta;
+
+  if (at === -1 || to < 0 || to >= state.chain.length) {
+    return;
+  }
+
+  state.chain.splice(to, 0, ...state.chain.splice(at, 1));
+  syncSelected();
+  emit();
+}
+
+/**
+ * `selected` is the head of the chain. It stays a field of its own because the
+ * header, the card highlight and the retarget check all read it, and none of
+ * them care that there is now an order behind it.
+ */
+function syncSelected() {
+  state.selected = state.chain[0] ?? null;
 }
 
 export function applyLockState(lock) {
   state.lock = lock;
   state.connected = true;
 
-  // Adopt the server's target exactly once, on the first poll. Doing it on
-  // every poll would yank a fresh selection back within a second.
+  // Adopt the server's chain exactly once, on the first poll. Doing it on every
+  // poll would yank a fresh selection back within a second.
   if (!state.hydrated) {
     state.hydrated = true;
 
-    if (lock.selectedAgent) {
-      state.selected = lock.selectedAgent;
+    // `selectedAgents` is the whole chain; `selectedAgent` is the one entry old
+    // builds sent. Reading both means a running worker is still adopted when
+    // the response comes from a server that predates the chain.
+    const chain = lock.selectedAgents?.length
+      ? [...lock.selectedAgents]
+      : lock.selectedAgent ? [lock.selectedAgent] : [];
+
+    if (chain.length > 0) {
+      state.chain = chain;
+      syncSelected();
     }
   }
 
@@ -445,7 +714,7 @@ export function setConnected(connected) {
 }
 
 export async function startLock() {
-  if (!state.selected || state.pending) {
+  if (state.chain.length === 0 || state.pending) {
     return;
   }
 
@@ -454,7 +723,7 @@ export async function startLock() {
   emit();
 
   try {
-    applyLockState(await requestLock(state.selected));
+    applyLockState(await requestLock(state.chain));
   } catch (error) {
     state.actionError = error instanceof ApiError ? error.message : "Could not start locking.";
     state.connected = !(error instanceof ApiError && error.status === 0);

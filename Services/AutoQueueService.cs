@@ -19,7 +19,12 @@ namespace Astral.Services;
 /// </summary>
 public sealed class AutoQueueService : IModuleStateSource
 {
-    /// <summary>Party states that mean the client is sitting in the menus.</summary>
+    /// <summary>
+    /// Party states that mean the client is sitting in the menus and a requeue is
+    /// safe. Everything else -- MATCHMAKING, MATCHMADE_GAME_STARTING,
+    /// CUSTOM_GAME_SETUP -- is either already queueing or busy, so the guard in
+    /// <see cref="HandleAsync"/> leaves it alone and names the state it saw.
+    /// </summary>
     private static readonly HashSet<string> MenuStates =
         new(["DEFAULT"], StringComparer.OrdinalIgnoreCase);
 
@@ -312,7 +317,10 @@ public sealed class AutoQueueService : IModuleStateSource
 
         if (!IsInMenus(party))
         {
-            UpdateStatus(generation, "Not in the menus; leaving the queue alone.");
+            // Naming the state matters: this is the branch that silently declines
+            // to requeue, and "not in the menus" on its own gives nobody anything
+            // to go on when the client reports something unexpected.
+            UpdateStatus(generation, $"Not in the menus ({party?.State ?? "unknown"}); leaving the queue alone.");
             return;
         }
 

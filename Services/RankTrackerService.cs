@@ -18,19 +18,40 @@ public sealed class RankTrackerService : IModuleStateSource
 
     private readonly ValorantConnection _connection;
     private readonly ValorantApiAssetService _assets;
+    private readonly OptionsStore _optionsStore;
     private readonly object _sync = new();
 
-    /// <summary>One refresh at a time; a second click piggybacks on the first.</summary>
-    private readonly SemaphoreSlim _refreshLock = new(1, 1);
+    /// <summary>
+    /// The refresh currently in flight, if any. A second caller awaits it rather
+    /// than starting its own -- these are account endpoints, and two clicks in a
+    /// row should not mean two rounds of calls to Riot.
+    /// </summary>
+    private Task? _inFlight;
 
     private RankState _state = RankState.Empty();
-    private DateTimeOffset _sessionStart = DateTimeOffset.UtcNow;
+    private DateTimeOffset _sessionStart;
 
-    public RankTrackerService(ValorantConnection connection, ValorantApiAssetService assets)
+    public RankTrackerService(
+        ValorantConnection connection,
+        ValorantApiAssetService assets,
+        OptionsStore optionsStore)
     {
         _connection = connection;
         _assets = assets;
+        _optionsStore = optionsStore;
+
+        // Resuming a saved anchor is what keeps closing the app from wiping the
+        // day's win/loss. OptionsStore has already discarded one that is too old
+        // to still mean "this session".
+        DateTimeOffset? saved = optionsStore.Current.Tracker.SessionStartedAt;
+        _sessionStart = saved ?? DateTimeOffset.UtcNow;
+
+        // A fresh anchor is only worth saving once there is something to resume,
+        // so the first refresh writes it rather than the constructor.
+        _anchorSaved = saved is not null;
     }
+
+    private bool _anchorSaved;
 
     public event Action<RankState>? StateChanged;
 
@@ -55,13 +76,14 @@ public sealed class RankTrackerService : IModuleStateSource
     }
 
     /// <summary>Re-anchors the session to now and recomputes from what is cached.</summary>
-    public void ResetSession()
+    public async Task ResetSessionAsync(CancellationToken cancellationToken = default)
     {
         RankState published;
+        DateTimeOffset anchor;
 
         lock (_sync)
         {
-            _sessionStart = DateTimeOffset.UtcNow;
+            anchor = _sessionStart = DateTimeOffset.UtcNow;
             published = _state = _state with
             {
                 Session = Summarize(_state.Matches, _sessionStart, _state.Rank)
@@ -69,13 +91,66 @@ public sealed class RankTrackerService : IModuleStateSource
         }
 
         Publish(published);
+        await PersistAnchorAsync(anchor, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task RefreshAsync(CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Writes the session anchor to settings so a restart resumes it. Failing to
+    /// save is not worth surfacing -- the session still works for this run, and
+    /// the tracker has nothing to say about a disk problem.
+    /// </summary>
+    private async Task PersistAnchorAsync(DateTimeOffset anchor, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _optionsStore
+                .ApplyTrackerAsync(new TrackerOptions { SessionStartedAt = anchor }, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // Ignored on purpose; see above.
+        }
+    }
+
+    /// <summary>
+    /// Re-reads rank and match history. Concurrent callers share one round of
+    /// requests: whoever arrives while a refresh is running awaits that one.
+    /// </summary>
+    public Task RefreshAsync(CancellationToken cancellationToken = default)
+    {
+        lock (_sync)
+        {
+            if (_inFlight is { IsCompleted: false })
+            {
+                return _inFlight;
+            }
+
+            // Assigned inside the lock so a caller arriving between the start of
+            // the run and the assignment cannot slip past and start a second.
+            return _inFlight = RunRefreshAsync(cancellationToken);
+        }
+    }
+
+    private async Task RunRefreshAsync(CancellationToken cancellationToken)
     {
         Publish(Mutate(state => state with { IsLoading = true, Error = null }));
 
-        await _refreshLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        DateTimeOffset? anchorToSave = null;
+
+        lock (_sync)
+        {
+            if (!_anchorSaved)
+            {
+                _anchorSaved = true;
+                anchorToSave = _sessionStart;
+            }
+        }
+
+        if (anchorToSave is { } anchor)
+        {
+            await PersistAnchorAsync(anchor, cancellationToken).ConfigureAwait(false);
+        }
 
         try
         {
@@ -140,7 +215,10 @@ public sealed class RankTrackerService : IModuleStateSource
         }
         finally
         {
-            _refreshLock.Release();
+            lock (_sync)
+            {
+                _inFlight = null;
+            }
         }
     }
 

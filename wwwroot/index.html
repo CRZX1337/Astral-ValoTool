@@ -58,6 +58,44 @@
       </div>
     </header>
 
+    <!-- Sits between the bar and the views on purpose: an update matters
+         whichever tool is open, so it must not scroll away with one of them.
+         Ships hidden; js/ui/update.js reveals it only when there is one. -->
+    <section class="update-banner glass" id="updateBanner" role="status" aria-live="polite" hidden>
+      <span class="update-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 3v11"></path>
+          <path d="m7.5 10.5 4.5 4.5 4.5-4.5"></path>
+          <path d="M4.5 19.5h15"></path>
+        </svg>
+      </span>
+
+      <div class="update-body">
+        <div class="update-title" id="updateTitle">Update available</div>
+        <div class="update-note" id="updateNote"></div>
+
+        <div class="update-bar" id="updateBar" role="progressbar"
+             aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
+          <span class="update-fill" id="updateFill" data-indeterminate="0"></span>
+        </div>
+
+        <p class="update-notes" id="updateNotes" hidden></p>
+        <a class="update-link" id="updateLink" href="#" target="_blank" rel="noreferrer noopener" hidden>
+          Release notes on GitHub
+        </a>
+      </div>
+
+      <div class="update-actions">
+        <button class="btn btn-ghost" id="updateSecondary" type="button">Skip</button>
+        <button class="btn btn-primary" id="updatePrimary" type="button">Download</button>
+        <button class="icon-btn update-close" id="updateClose" type="button" aria-label="Dismiss">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18"></path>
+          </svg>
+        </button>
+      </div>
+    </section>
+
     <div class="viewport" id="viewport">
       <!-- ================= Home ================= -->
       <section class="view home" id="view-home" data-view="home">
@@ -110,6 +148,22 @@
             </span>
           </button>
 
+          <button class="tool-card glass glass-rim lit tilt" type="button" data-goto="intel" style="--i: 3">
+            <span class="tool-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="9" cy="8" r="3"></circle>
+                <path d="M3.5 19a5.5 5.5 0 0 1 11 0"></path>
+                <path d="M16.5 6.5a3.5 3.5 0 0 1 0 7"></path>
+                <path d="M17.5 19a5.5 5.5 0 0 0-2-4.3"></path>
+              </svg>
+            </span>
+            <span class="tool-name">Lobby intel</span>
+            <span class="tool-desc">Who is on your team in agent select, their rank, and what they have picked.</span>
+            <span class="tool-status" id="statusIntel" data-live="off">
+              <span class="tool-dot" aria-hidden="true"></span><span>Not watching</span>
+            </span>
+          </button>
+
         </div>
       </section>
 
@@ -155,6 +209,12 @@
             <p class="eyebrow">Target agent</p>
             <h1 class="panel-name" id="panelName">No agent selected</h1>
             <span class="role-chip" id="panelRole" data-role="unknown" hidden></span>
+          </div>
+
+          <div class="panel-chain" id="panelChain" hidden>
+            <p class="eyebrow">Fallback order</p>
+            <ol class="chain-list" id="chainList"></ol>
+            <p class="chain-hint">Tried top to bottom; whoever is free first gets locked.</p>
           </div>
 
           <div class="panel-status">
@@ -295,6 +355,29 @@
           </div>
 
           <p class="tool-note" id="queueSaveNote" role="status"></p>
+        </section>
+      </section>
+
+      <!-- ================= Lobby intel ================= -->
+      <section class="view view-tool" id="view-intel" data-view="intel" hidden>
+        <header class="tool-head glass">
+          <div>
+            <div class="tool-head-title" id="intelMap">Lobby intel</div>
+            <div class="tool-head-sub" id="intelStatus">Not watching.</div>
+          </div>
+          <div class="tool-head-actions">
+            <span class="intel-timer" id="intelTimer" hidden></span>
+            <span class="intel-count" id="intelLocked" hidden></span>
+          </div>
+        </header>
+
+        <p class="tool-alert" id="intelAlert" role="alert" hidden></p>
+
+        <section class="tool-body glass">
+          <div class="tool-head-title">Your team</div>
+          <div class="lobby-list" id="lobbyList"></div>
+          <p class="tool-empty" id="lobbyEmpty">Open agent select and your team will appear here.</p>
+          <p class="tool-note">Read from your own client. Players who play incognito stay unnamed.</p>
         </section>
       </section>
 
