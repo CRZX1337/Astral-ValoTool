@@ -15,12 +15,22 @@
 
 /* 1. Boot overlay ======================================================== */
 
+/* Draggable like the topbar it covers. This sits at z-index 200 over an .app
+   that is a stacking context at 1, so the caption buttons in the bar are
+   genuinely behind it for as long as the splash is up -- roughly the 1.1s floor
+   in js/ui/boot.js. Without this the window could not be moved at all in that
+   window, since there is no OS title bar left to grab.
+
+   Closing during the splash goes through the tray icon, which DesktopAppForm
+   creates in its constructor and so is up before WebView2 has even loaded. */
 .boot {
   position: fixed;
   inset: 0;
   z-index: 200;
   display: grid;
   place-items: center;
+  app-region: drag;
+  -webkit-app-region: drag;
   background:
     radial-gradient(60% 50% at 50% 42%, rgba(91, 181, 255, 0.10), transparent 70%),
     linear-gradient(180deg, var(--bg-0), var(--bg-1) 60%, #101219);
@@ -139,8 +149,15 @@ body.boot-armed:not([data-booted]) .tool-card {
   opacity: 0;
 }
 
+/* `backwards`, not `both`. The fill is only needed on the front end, to hold the
+   card at opacity 0 through its stagger delay. Filling forwards as well means a
+   *finished* animation keeps applying card-in's end state for good -- and that end
+   state is `transform: none`, which outranks the inline transform ui/tilt.js writes
+   on pointermove. With `both` the tilt was dead on all four cards. Rest state is
+   identical either way; the only rule that also touches these cards on hover is
+   shell.css:130, and it sets border-color. */
 body[data-booted] .tool-card {
-  animation: card-in 640ms var(--spring) both;
+  animation: card-in 640ms var(--spring) backwards;
   animation-delay: calc(180ms + var(--i, 0) * 85ms);
 }
 
@@ -340,4 +357,47 @@ body[data-booted] .tool-card {
   .boot-mark img {
     display: none;
   }
+}
+
+/* 7. Idle ================================================================ */
+
+/* js/ui/perf.js sets data-idle whenever the window is hidden or has lost focus.
+   For this app that is the normal state, not the exception: it sits behind a
+   fullscreen game and gets looked at between rounds. Every endless decoration
+   below keeps whatever frame it is on and stops asking for the next one.
+
+   The one that matters most is .ambient. It is not expensive by itself, but the
+   three to six backdrop-filtered surfaces above it have to re-capture and
+   re-blur their backdrop for as long as it moves -- on a GPU the game is already
+   using. Stopping it stops all of them.
+
+   Deliberately an enumeration rather than `body[data-idle] *`. A wildcard would
+   catch the entry choreography in section 4 too, and all of that is `both`-
+   filled: lose focus during the boot splash and you would come back to an .app
+   still sitting at opacity 0. Everything named here is `infinite` and has no end
+   state worth arriving at. The full set is `grep -rn infinite --include=*.css`.
+
+   Selectors are the decorated element rather than the state selector that turns
+   it on (`.card-flag::after`, not `.agent-card[data-flag="locked"] .card-flag
+   ::after`), so renaming a state cannot silently break the pause. That costs the
+   specificity race against those state rules, hence !important -- the same
+   answer the reduced-motion block above gives for the same reason.
+
+   .glass-rim::after is in the list even though its rotation is hover-only now:
+   :focus-visible survives the window losing focus, so a card tabbed to before
+   an alt-tab would otherwise keep spinning. */
+body[data-idle] .ambient,
+body[data-idle] .boot-ring,
+body[data-idle] .btn-spinner,
+body[data-idle] .glass-rim::after,
+body[data-idle] .hero-art::before,
+body[data-idle] .phase-dot,
+body[data-idle] .phase-dot::after,
+body[data-idle] .card-flag::after,
+body[data-idle] .tool-dot::after,
+body[data-idle] .agent-card.is-skeleton::after,
+body[data-idle] .panel,
+body[data-idle] .update-mark svg,
+body[data-idle] .update-fill {
+  animation-play-state: paused !important;
 }

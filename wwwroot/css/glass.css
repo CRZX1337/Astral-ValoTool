@@ -83,6 +83,21 @@
     linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
+}
+
+/* Rotation is on hover only, and deliberately so.
+
+   `--angle` is a registered custom property, which means the conic gradient is
+   re-rasterised on every frame it changes -- and `mask-composite` cannot be
+   handed to the compositor either. Four cards spinning permanently on the home
+   screen is four full repaints per frame, each one under a backdrop-filter, for
+   an effect nobody is looking at. Under the pointer it is at most one card, and
+   an unfocused window has no pointer at all.
+
+   The gradient itself stays painted, so the ring is still there when it is
+   standing still. */
+.glass-rim:hover::after,
+.glass-rim:focus-visible::after {
   animation: rim-spin 14s linear infinite;
 }
 
@@ -135,17 +150,23 @@
 .tilt {
   transform-style: preserve-3d;
   transition: transform 420ms var(--ease-out);
-  will-change: transform;
 }
 
+/* will-change lives here rather than on .tilt: as a standing hint it would keep
+   a compositing layer alive for every card on screen, each one a separate
+   surface the backdrop-filter above has to be composited against. tilt.js adds
+   this class on pointer entry and drops it on leave, which is exactly the
+   window in which the promotion pays for itself. */
 .tilt.is-tilting {
   transition: transform 90ms linear;
+  will-change: transform;
 }
 
 /* 4. Degradation ========================================================= */
 
 @media (prefers-reduced-motion: reduce) {
-  .glass-rim::after {
+  .glass-rim:hover::after,
+  .glass-rim:focus-visible::after {
     animation: none;
   }
 
@@ -156,15 +177,39 @@
   }
 }
 
-/* Transparency turned down: glass becomes opaque panels. Everything still has
-   depth from the shadow and hairline, just no see-through. */
-@media (prefers-reduced-transparency: reduce) {
-  .glass {
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-    background: var(--bg-1);
-  }
+/* The cheap tier. Glass becomes opaque panels; everything still has depth from
+   the shadow and the hairline, just no see-through.
 
+   Two things ask for it, and they get the same answer:
+
+     - prefers-reduced-transparency, the OS preference
+     - body[data-perf="low"], set by js/ui/perf.js when the boot-time frame
+       probe finds the compositor is not keeping up. That is the machine
+       styles.css already worried about at .hero-badge: a WebView2 without GPU
+       acceleration, where a captured-and-blurred backdrop is drawn on the CPU.
+
+   Both flip the same two variables from styles.css rather than restating the
+   surfaces, so a .glass added later is covered without being listed here. */
+body[data-perf="low"] {
+  --glass-blur: none;
+  --glass-bg: var(--surface-solid);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --glass-blur: none;
+    --glass-bg: var(--surface-solid);
+  }
+}
+
+/* The two decorations that only read as glass while the surface is see-through.
+   Selectors, not variables, so this half does have to be said twice. */
+body[data-perf="low"] .glass-rim::after,
+body[data-perf="low"] .lit::before {
+  display: none;
+}
+
+@media (prefers-reduced-transparency: reduce) {
   .glass-rim::after,
   .lit::before {
     display: none;

@@ -20,12 +20,14 @@ import { mountControlPanel } from "./ui/control-panel.js";
 import { mountControls } from "./ui/controls.js";
 import { mountHeader } from "./ui/header.js";
 import { mountIntel } from "./ui/intel.js";
+import { mountPerf } from "./ui/perf.js";
 import { mountSettings } from "./ui/settings.js";
 import { mountShell } from "./ui/shell.js";
 import { mountTilt } from "./ui/tilt.js";
 import { mountTooltips } from "./ui/tooltip.js";
 import { mountTracker } from "./ui/tracker.js";
 import { mountUpdate } from "./ui/update.js";
+import { mountWindowControls } from "./ui/window-controls.js";
 
 // Belt and braces for the context menu: DesktopAppForm turns it off in
 // WebView2 itself, which is the real fix, but that setting is only applied
@@ -34,6 +36,11 @@ import { mountUpdate } from "./ui/update.js";
 document.addEventListener("contextmenu", (event) => event.preventDefault());
 
 const views = [
+  // First on purpose: the frame probe should measure the boot sequence, which is
+  // the busiest the window ever gets, and the idle flag should be right from the
+  // very first frame rather than after the splash.
+  mountPerf(),
+  mountWindowControls(),
   mountBoot(),
   mountShell(),
   mountHeader(),

@@ -117,8 +117,11 @@
   cursor: pointer;
   overflow: hidden;
 
-  /* Staggered entry; --i is set per card in the markup. */
-  animation: card-in 460ms var(--ease-out) both;
+  /* Staggered entry; --i is set per card in the markup. Overridden by
+     css/motion.css once the boot sequence is armed -- this is the bare fallback
+     for boot.js never loading. `backwards` for the same reason it gives there:
+     filling forwards past the end pins transform and kills the tilt. */
+  animation: card-in 460ms var(--ease-out) backwards;
   animation-delay: calc(var(--i, 0) * 65ms);
 }
 
@@ -189,6 +192,7 @@
 }
 
 .tool-dot {
+  position: relative;
   width: 6px;
   height: 6px;
   border-radius: 50%;
@@ -196,8 +200,21 @@
   flex: none;
 }
 
-.tool-status[data-live="on"] .tool-dot {
-  animation: pulse-ring 2.2s var(--ease) infinite;
+/* Same swap as .phase-dot in styles.css: a scaled pseudo-element instead of an
+   animated box-shadow, so the live indicator stops repainting the card -- and
+   the blurred surface it sits on -- once per frame. `radar` lives in styles.css.
+
+   currentColor is mixed down rather than used flat: radar peaks at 0.7 opacity,
+   and the accent at full strength would read as a second dot rather than a
+   halo. */
+.tool-status[data-live="on"] .tool-dot::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  background: color-mix(in srgb, currentColor 45%, transparent);
+  pointer-events: none;
+  animation: radar 2.2s var(--ease) infinite;
 }
 
 /* 3. Shared tool chrome ================================================== */

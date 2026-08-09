@@ -12,6 +12,13 @@
   <link rel="stylesheet" href="/css/motion.css">
 </head>
 <body data-phase="booting" data-role="unknown" data-view="home">
+  <!-- The top resize edge. Every other edge of the window is a real non-client
+       sizing strip that DWM hit-tests on its own, outside the window; the top
+       one was given to the page along with the caption, so it is synthesised
+       here. Hidden without a WebView2 host, like the caption buttons: in a
+       normal browser tab there is no window to resize. -->
+  <div class="resize-top" id="resizeTop" aria-hidden="true" hidden></div>
+
   <div class="ambient" aria-hidden="true"></div>
 
   <!-- Shown by js/ui/boot.js and removed once the agent list is in. Ships
@@ -54,6 +61,29 @@
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54A.48.48 0 0 0 13.9 2h-3.8a.48.48 0 0 0-.47.41l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.47a.48.48 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.8c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"></path>
           </svg>
+        </button>
+      </div>
+
+      <!-- A direct child of .topbar rather than of .topbar-status: the caption
+           buttons have to span the bar's full height to read as native, and
+           .topbar-status centres its children at content height.
+
+           Hidden until js/ui/window-controls.js finds a WebView2 host, so the
+           loopback port in a normal browser -- and devstub.py -- do not show
+           three controls that cannot do anything. -->
+      <div class="window-controls" id="windowControls" hidden>
+        <button class="win-btn" data-window-action="minimize" type="button" aria-label="Minimize">
+          <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5h10"></path></svg>
+        </button>
+        <button class="win-btn" data-window-action="maximize" type="button" aria-label="Maximize" id="maximizeButton">
+          <svg class="win-glyph-max" viewBox="0 0 10 10" aria-hidden="true"><path d="M.5.5h9v9h-9z"></path></svg>
+          <svg class="win-glyph-restore" viewBox="0 0 10 10" aria-hidden="true">
+            <path d="M2.5 2.5h7v7h-7z"></path>
+            <path d="M.5 7.5v-7h7"></path>
+          </svg>
+        </button>
+        <button class="win-btn win-btn-close" data-window-action="close" type="button" aria-label="Close">
+          <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10"></path></svg>
         </button>
       </div>
     </header>

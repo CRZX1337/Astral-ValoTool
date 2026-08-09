@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 using Astral.Models;
@@ -52,9 +53,22 @@ public sealed class DesktopAppForm : Form
         }
 
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(1000, 550);
-        MinimumSize = new Size(1000, 550);
-        FormBorderStyle = FormBorderStyle.Sizable;
+
+        // Sized in ApplyFrameSizing once the handle exists and the monitor's DPI
+        // is known. ClientSize cannot do it here: it runs through
+        // AdjustWindowRectEx using CreateParams.Style, and that style still
+        // carries WS_CAPTION, so it would reserve a caption's height that
+        // WM_NCCALCSIZE then hands straight back to the page.
+
+        // The caption is drawn by the page instead -- .topbar in wwwroot carries
+        // app-region: drag, and WebView2 turns that into a real title bar.
+        //
+        // Borderless, but not styleless: CreateParams keeps the frame styles, so
+        // Windows still owns resizing, Aero Snap and the window animations. Only
+        // the caption's pixels are taken away (WM_NCCALCSIZE); the sizing strips
+        // stay non-client, which is why the edges are still grabbable without any
+        // hit-testing here. See the "Window frame" block below.
+        FormBorderStyle = FormBorderStyle.None;
         MaximizeBox = true;
         MinimizeBox = true;
         BackColor = Color.FromArgb(11, 11, 15);
@@ -69,6 +83,270 @@ public sealed class DesktopAppForm : Form
         {
             await InitializeWebViewAsync();
         };
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Window frame
+     *
+     * The window has no caption and no border of its own -- wwwroot draws the
+     * title bar. What is deliberately *not* reimplemented is everything DWM
+     * already does, so the frame styles stay on the window (CreateParams) and
+     * only their pixels are taken away (WM_NCCALCSIZE). That keeps Aero Snap,
+     * Snap Layouts on the maximise button, the minimise/restore animations and
+     * the drop shadow.
+     *
+     * WS_THICKFRAME also comes with three transparent strips beside the left,
+     * right and bottom edges -- eight pixels at 100%, drawn and hit-tested by
+     * DWM, and lying *outside* the visible window. That is what a normal window
+     * is grabbed by. Handing the whole frame to the client area, which is what
+     * returning 0 from WM_NCCALCSIZE does, pulls those three strips inside the
+     * window and makes them visible: they showed up as a black band around the
+     * page, because painting them is suddenly our job and BackColor is all there
+     * is. So only the caption is taken (WM_NCCALCSIZE below), the sizing strips
+     * are left where DWM put them, and resizing, the resize cursors and Aero
+     * Snap keep working without a line of hit-testing here.
+     *
+     * The top edge is the exception: it has no invisible strip, so its grab zone
+     * would have to come out of the visible window. It is synthesised from the
+     * page instead -- the WebView2 child window would eat the mouse message long
+     * before this form saw it -- via `window:resize:top` in OnWebMessage.
+     * ------------------------------------------------------------------ */
+
+    private const int WM_NCCALCSIZE = 0x0083;
+    private const int WM_NCLBUTTONDOWN = 0x00A1;
+
+    private const int WS_CAPTION = 0x00C00000;
+    private const int WS_THICKFRAME = 0x00040000;
+    private const int WS_SYSMENU = 0x00080000;
+    private const int WS_MINIMIZEBOX = 0x00020000;
+    private const int WS_MAXIMIZEBOX = 0x00010000;
+
+    /// <summary>
+    /// HTTOP, for the synthesised top resize edge. Passing this to
+    /// WM_NCLBUTTONDOWN starts the system's own resize loop, so the drag itself,
+    /// the cursor and the snap behaviour are all still the shell's.
+    /// </summary>
+    private const int HTTOP = 12;
+
+    /// <summary>DWMWA_WINDOW_CORNER_PREFERENCE, and DWMWCP_ROUND for it.</summary>
+    private const int DwmWindowCornerPreference = 33;
+    private const int DwmCornerRound = 2;
+
+    /// <summary>DWMWA_BORDER_COLOR, and the DWMWA_COLOR_NONE sentinel for it.</summary>
+    private const int DwmBorderColor = 34;
+    private const uint DwmColorNone = 0xFFFFFFFE;
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
+
+    /// <summary>
+    /// Asked rather than read off WindowState: this is needed inside
+    /// WM_NCCALCSIZE, which arrives mid-flight during the maximise, and
+    /// Form.WindowState is a cached field that WinForms only refreshes once
+    /// WM_WINDOWPOSCHANGED comes back. The style bit is already correct by then.
+    /// </summary>
+    [DllImport("user32.dll")]
+    private static extern bool IsZoomed(IntPtr hwnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool ReleaseCapture();
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr SendMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam);
+
+    /// <summary>
+    /// SM_CXSIZEFRAME / SM_CYSIZEFRAME plus SM_CXPADDEDBORDER is the width of one
+    /// sizing strip. Needed because the strips are part of the window but not of
+    /// the page, so the window has to be that much bigger than the size the
+    /// layout was drawn for.
+    /// </summary>
+    private const int SmCxSizeFrame = 32;
+    private const int SmCySizeFrame = 33;
+    private const int SmCxPaddedBorder = 92;
+
+    /// <summary>
+    /// SM_CYCAPTION. Read per-DPI rather than from SystemInformation, which
+    /// answers for the primary monitor's scale even when this window is on
+    /// another one.
+    /// </summary>
+    private const int SmCyCaption = 4;
+
+    [DllImport("user32.dll")]
+    private static extern int GetSystemMetricsForDpi(int index, uint dpi);
+
+    /// <summary>First member of NCCALCSIZE_PARAMS: rgrc[0].</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeRect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    /// <summary>
+    /// FormBorderStyle.None strips the window down to WS_POPUP, and with it every
+    /// window-management behaviour the shell hangs off these style bits. Putting
+    /// them back costs nothing visually once WM_NCCALCSIZE zeroes the frame.
+    ///
+    /// WS_CAPTION is the one that is easy to get wrong. It looks redundant on a
+    /// window that draws no caption, but DWM keys the minimise, restore and
+    /// maximise animations off it -- without the bit the window simply appears
+    /// and disappears. WS_THICKFRAME carries resizing and Aero Snap, WS_SYSMENU
+    /// the system menu and the taskbar's minimise-on-click, and the two box
+    /// styles decide whether Snap Layouts offers anything at all.
+    /// </summary>
+    protected override CreateParams CreateParams
+    {
+        get
+        {
+            CreateParams cp = base.CreateParams;
+            cp.Style |= WS_CAPTION | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
+            return cp;
+        }
+    }
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+
+        // Windows 11 rounds a framed window on its own, but not one whose
+        // non-client area has been removed. Older shells fail the call, which is
+        // why the HRESULT is dropped rather than checked.
+        int preference = DwmCornerRound;
+        _ = DwmSetWindowAttribute(Handle, DwmWindowCornerPreference, ref preference, sizeof(int));
+
+        // The pale hairline DWM draws around every WS_THICKFRAME window. It is
+        // the visible remains of a frame whose pixels WM_NCCALCSIZE already gave
+        // to the client area, so it lands *on top of* the page -- brightest while
+        // the window has focus, which is why it reads as an alt-tab artefact.
+        // DWMWA_COLOR_NONE removes it outright (Windows 11 22000+; older shells
+        // fail the call and keep the line).
+        int border = unchecked((int)DwmColorNone);
+        _ = DwmSetWindowAttribute(Handle, DwmBorderColor, ref border, sizeof(int));
+
+        ApplyFrameSizing();
+        DpiChanged += (_, _) => ApplyFrameSizing();
+    }
+
+    /// <summary>
+    /// The page is laid out for 1000x550, and the sizing strips are window pixels
+    /// the page never sees, so the window is asked for that much more. Only the
+    /// left, right and bottom strips exist -- the top edge of the window is the
+    /// top edge of the page.
+    /// </summary>
+    private void ApplyFrameSizing()
+    {
+        uint dpi = (uint)DeviceDpi;
+        int padded = GetSystemMetricsForDpi(SmCxPaddedBorder, dpi);
+        int stripX = GetSystemMetricsForDpi(SmCxSizeFrame, dpi) + padded;
+        int stripY = GetSystemMetricsForDpi(SmCySizeFrame, dpi) + padded;
+
+        Size wanted = new(
+            LogicalToDeviceUnits(1000) + stripX * 2,
+            LogicalToDeviceUnits(550) + stripY);
+
+        // Order matters: a MinimumSize larger than the current Size resizes the
+        // window on the spot, and setting Size first would then be undone.
+        MinimumSize = wanted;
+
+        if (WindowState == FormWindowState.Normal)
+        {
+            Size = wanted;
+        }
+    }
+
+    protected override void OnResize(EventArgs e)
+    {
+        base.OnResize(e);
+        PostWindowState();
+    }
+
+    protected override void OnActivated(EventArgs e)
+    {
+        base.OnActivated(e);
+        PostFocusState(true);
+    }
+
+    protected override void OnDeactivate(EventArgs e)
+    {
+        base.OnDeactivate(e);
+        PostFocusState(false);
+    }
+
+    protected override void WndProc(ref Message m)
+    {
+        switch (m.Msg)
+        {
+            case WM_NCCALCSIZE when m.WParam != IntPtr.Zero:
+            {
+                // Let the shell propose its frame first, then take only the top
+                // edge of it. That single line is the caption; the left, right and
+                // bottom sides it leaves alone are the transparent sizing strips
+                // DWM owns, and they have to stay non-client or they become
+                // visible page area -- which is exactly the black band that
+                // returning 0 here produced.
+                base.WndProc(ref m);
+
+                NativeRect frame = Marshal.PtrToStructure<NativeRect>(m.LParam);
+                uint dpi = (uint)DeviceDpi;
+
+                // The caption goes in both states -- the page draws its own.
+                frame.Top -= GetSystemMetricsForDpi(SmCyCaption, dpi);
+
+                // The sizing strip along the top only goes when the window is
+                // restored, where the top edge of the page should be the top edge of
+                // the window. Maximised, the shell has already inset every side by
+                // one strip so that the client area lands exactly on the work area;
+                // taking that inset away as well would push the page an edge's worth
+                // off every side of the screen.
+                if (!IsZoomed(Handle))
+                {
+                    frame.Top -= GetSystemMetricsForDpi(SmCySizeFrame, dpi)
+                        + GetSystemMetricsForDpi(SmCxPaddedBorder, dpi);
+                }
+
+                Marshal.StructureToPtr(frame, m.LParam, false);
+                return;
+            }
+
+            // WM_NCHITTEST is not handled. Every edge except the top is a real
+            // non-client sizing strip again, so DefWindowProc answers correctly on
+            // its own -- including the corners, and including the part of the grab
+            // zone that lies outside the visible window.
+            //
+            // The top edge is the page's job: see WM_NCLBUTTONDOWN below.
+
+            case WM_NCLBUTTONDOWN when m.WParam == new IntPtr(HTTOP):
+            {
+                // Posted from the page (`window:resize:top`) rather than arriving
+                // from the shell: there is no non-client strip along the top for a
+                // real WM_NCHITTEST to land in, and the WebView2 child window would
+                // swallow the press long before this form saw it. Handing HTTOP to
+                // DefWindowProc from here starts the shell's own resize loop, so the
+                // drag, the cursor and the snap-to-edge behaviour are unchanged.
+                break;
+            }
+        }
+
+        base.WndProc(ref m);
+    }
+
+    /// <summary>
+    /// Starts the shell's resize loop on the top edge, which is the one edge with
+    /// no non-client strip of its own. ReleaseCapture first: the page has already
+    /// captured the pointer for the press, and the loop cannot take over while
+    /// something else holds capture.
+    /// </summary>
+    private void BeginTopResize()
+    {
+        if (WindowState != FormWindowState.Normal)
+        {
+            return;
+        }
+
+        _ = ReleaseCapture();
+        _ = SendMessage(Handle, WM_NCLBUTTONDOWN, new IntPtr(HTTOP), IntPtr.Zero);
     }
 
     /// <summary>
@@ -245,6 +523,12 @@ public sealed class DesktopAppForm : Form
 
             await _webView.EnsureCoreWebView2Async();
             HardenBrowser(_webView.CoreWebView2.Settings);
+            _webView.CoreWebView2.WebMessageReceived += OnWebMessage;
+
+            // The page mounts after this navigation, so its first read of the
+            // maximise glyph comes from the handshake in OnNavigationCompleted
+            // rather than from here.
+            _webView.CoreWebView2.NavigationCompleted += (_, _) => PostWindowState();
             _webView.Source = new Uri(_url);
         }
         catch (Exception ex)
@@ -272,6 +556,96 @@ public sealed class DesktopAppForm : Form
         settings.AreDevToolsEnabled = false;
         settings.IsZoomControlEnabled = false;
         settings.IsStatusBarEnabled = false;
+
+        // Lets the page act as the title bar through `app-region: drag`. Windows
+        // then handles the parts a script cannot do well: dragging without lag,
+        // double-click to maximise, the system menu on right-click, and Snap
+        // Layouts when the pointer rests on the maximise button.
+        //
+        // Only applies from the next navigation, so this has to stay ahead of the
+        // Source assignment in InitializeWebViewAsync.
+        settings.IsNonClientRegionSupportEnabled = true;
+    }
+
+    /// <summary>
+    /// The three caption buttons. Deliberately thin: the page says what was
+    /// pressed and this decides what it means, so Close still goes through
+    /// OnFormClosing and parks in the tray rather than exiting.
+    /// </summary>
+    private void OnWebMessage(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
+    {
+        string message;
+
+        try
+        {
+            message = e.TryGetWebMessageAsString();
+        }
+        catch (ArgumentException)
+        {
+            // Not a string payload -- not ours.
+            return;
+        }
+
+        switch (message)
+        {
+            case "window:minimize":
+                WindowState = FormWindowState.Minimized;
+                break;
+
+            case "window:maximize":
+                WindowState = WindowState == FormWindowState.Maximized
+                    ? FormWindowState.Normal
+                    : FormWindowState.Maximized;
+                break;
+
+            case "window:close":
+                Close();
+                break;
+
+            case "window:resize:top":
+                BeginTopResize();
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Keeps the maximise button's glyph honest. Sent on every resize because
+    /// the state also changes by way of Aero Snap, a double-click on the drag
+    /// region and the system menu -- none of which come through OnWebMessage.
+    /// </summary>
+    private void PostWindowState()
+    {
+        if (_webView.CoreWebView2 is null)
+        {
+            return;
+        }
+
+        _webView.CoreWebView2.PostWebMessageAsString(
+            WindowState == FormWindowState.Maximized
+                ? "window:state:maximized"
+                : "window:state:normal");
+    }
+
+    /// <summary>
+    /// Drives the idle flag in js/ui/perf.js, which parks every endless
+    /// decoration while nobody is looking at the window.
+    ///
+    /// The page listens for its own focus/blur as well, but those cannot be
+    /// relied on here: a full-screen game taking the foreground deactivates this
+    /// form without necessarily reaching the WebView2's document, and that is
+    /// exactly the case the idle pause exists for. This form always hears about
+    /// it, so it says so directly. Both paths set the same flag and agree, so
+    /// whichever arrives is fine.
+    /// </summary>
+    private void PostFocusState(bool active)
+    {
+        if (_webView.CoreWebView2 is null)
+        {
+            return;
+        }
+
+        _webView.CoreWebView2.PostWebMessageAsString(
+            active ? "window:focus:active" : "window:focus:idle");
     }
 
     private void ShowInitializationError(Exception ex)
