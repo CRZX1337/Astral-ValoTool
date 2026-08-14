@@ -43,10 +43,45 @@ internal static class UpdateVerification
 
     internal static bool MatchesSha256(string path, byte[] expected)
     {
-        using FileStream stream = File.OpenRead(path);
+        using FileStream stream = OpenControlledRead(path);
+        return MatchesSha256(stream, expected);
+    }
+
+    internal static FileStream OpenControlledRead(string path)
+    {
+        return new FileStream(
+            path,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            bufferSize: 81920,
+            options: FileOptions.SequentialScan);
+    }
+
+    internal static bool MatchesSha256(Stream stream, byte[] expected)
+    {
+        if (stream.CanSeek)
+        {
+            stream.Position = 0;
+        }
+
         byte[] actual = SHA256.HashData(stream);
+
+        if (stream.CanSeek)
+        {
+            stream.Position = 0;
+        }
+
         return actual.Length == expected.Length && CryptographicOperations.FixedTimeEquals(actual, expected);
     }
+
+    /// <summary>
+    /// The gate every update must pass. The SHA-256 check is always mandatory;
+    /// Authenticode only counts when the user enabled it, and a valid signature
+    /// never compensates for a hash mismatch.
+    /// </summary>
+    internal static bool PassesIntegrityGate(bool sha256Matches, bool requireAuthenticode, bool hasValidAuthenticode)
+        => sha256Matches && (!requireAuthenticode || hasValidAuthenticode);
 
     internal static bool HasValidAuthenticode(string path, string? requiredSubject)
     {
@@ -76,43 +111,80 @@ internal static class UpdateVerification
     private static bool WinVerifyTrust(string path)
     {
         Guid action = WinTrustActionGenericVerifyV2;
-        WINTRUST_FILE_INFO file = new()
-        {
-            cbStruct = (uint)Marshal.SizeOf<WINTRUST_FILE_INFO>(),
-            pcwszFilePath = Marshal.StringToCoTaskMemUni(path)
-        };
-
-        IntPtr filePtr = Marshal.AllocCoTaskMem(Marshal.SizeOf<WINTRUST_FILE_INFO>());
-        Marshal.StructureToPtr(file, filePtr, false);
-
-        WINTRUST_DATA data = new()
-        {
-            cbStruct = (uint)Marshal.SizeOf<WINTRUST_DATA>(),
-            dwUIChoice = WtdUiNone,
-            fdwRevocationChecks = WtdRevokeNone,
-            dwUnionChoice = WtdChoiceFile,
-            pFile = filePtr,
-            dwStateAction = WtdStateActionIgnore,
-            dwProvFlags = WtdRevocationCheckNone
-        };
+        IntPtr filePath = IntPtr.Zero;
+        IntPtr filePtr = IntPtr.Zero;
+        bool verifyCalled = false;
+        WINTRUST_DATA data = default;
 
         try
         {
+            filePath = Marshal.StringToCoTaskMemUni(path);
+            WINTRUST_FILE_INFO file = new()
+            {
+                cbStruct = (uint)Marshal.SizeOf<WINTRUST_FILE_INFO>(),
+                pcwszFilePath = filePath
+            };
+
+            filePtr = Marshal.AllocCoTaskMem(Marshal.SizeOf<WINTRUST_FILE_INFO>());
+            Marshal.StructureToPtr(file, filePtr, false);
+
+            data = new WINTRUST_DATA
+            {
+                cbStruct = (uint)Marshal.SizeOf<WINTRUST_DATA>(),
+                dwUIChoice = WtdUiNone,
+                fdwRevocationChecks = WtdRevokeWholeChain,
+                dwUnionChoice = WtdChoiceFile,
+                pFile = filePtr,
+                // VERIFY creates provider state in hWVTStateData. CLOSE below
+                // releases that state on both success and failure.
+                dwStateAction = WtdStateActionVerify,
+                dwProvFlags = WtdRevocationCheckChainExcludeRoot
+            };
+
+            verifyCalled = true;
             return WinVerifyTrust(IntPtr.Zero, ref action, ref data) == 0;
         }
         finally
         {
-            Marshal.DestroyStructure<WINTRUST_FILE_INFO>(filePtr);
-            Marshal.FreeCoTaskMem(filePtr);
-            Marshal.FreeCoTaskMem(file.pcwszFilePath);
+            if (verifyCalled && filePtr != IntPtr.Zero)
+            {
+                WINTRUST_DATA closeData = data;
+                closeData.dwStateAction = WtdStateActionClose;
+
+                try
+                {
+                    // The verification result is authoritative. Cleanup must not
+                    // replace it, and WinTrust's CLOSE call has no useful result
+                    // for this boolean API.
+                    _ = WinVerifyTrust(IntPtr.Zero, ref action, ref closeData);
+                }
+                catch
+                {
+                    // Continue to release every allocation even if the native
+                    // cleanup call itself cannot complete.
+                }
+            }
+
+            if (filePtr != IntPtr.Zero)
+            {
+                Marshal.DestroyStructure<WINTRUST_FILE_INFO>(filePtr);
+                Marshal.FreeCoTaskMem(filePtr);
+            }
+
+            if (filePath != IntPtr.Zero)
+            {
+                Marshal.FreeCoTaskMem(filePath);
+            }
         }
     }
 
     private const uint WtdUiNone = 2;
     private const uint WtdRevokeNone = 0;
+    private const uint WtdRevokeWholeChain = 1;
     private const uint WtdChoiceFile = 1;
-    private const uint WtdStateActionIgnore = 0;
-    private const uint WtdRevocationCheckNone = 0x00000010;
+    private const uint WtdStateActionVerify = 1;
+    private const uint WtdStateActionClose = 2;
+    private const uint WtdRevocationCheckChainExcludeRoot = 0x00000080;
 
     private static readonly Guid WinTrustActionGenericVerifyV2 = new("00AAC56B-CD44-11d0-8CC2-00C04FC295EE");
 

@@ -20,8 +20,12 @@ public sealed class UpdateOptions
     /// <summary>Whether pre-releases count as updates. Off: only full releases.</summary>
     public bool IncludePrereleases { get; set; }
 
-    /// <summary>Reject downloaded executables without a valid Authenticode signature.</summary>
-    public bool RequireAuthenticodeSignature { get; set; } = true;
+    /// <summary>
+    /// Require a valid Authenticode signature before staging or applying an
+    /// executable. Off by default: releases are protected by their SHA-256
+    /// checksums, which are always verified regardless of this setting.
+    /// </summary>
+    public bool RequireAuthenticodeSignature { get; set; } = false;
 
     /// <summary>Optional exact certificate subject to require after signature validation.</summary>
     public string? RequiredSignerSubject { get; set; }

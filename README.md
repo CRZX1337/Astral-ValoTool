@@ -337,8 +337,12 @@ carrying the reason. `progress` is null until a download reports a total size.
 its place, launches it and closes this window; the leftover is swept on the next
 start. If the copy fails the old binary is moved back, so a failed update never
 leaves you without a working Astral. The updater only accepts a release containing
-both `Astral.exe` and `Astral.exe.sha256`, verifies the SHA-256 hash, and requires
-a valid Authenticode signature before staging or applying the executable.
+both `Astral.exe` and `Astral.exe.sha256` and verifies the SHA-256 hash after
+download and again before applying. Astral releases are protected by SHA-256
+checksums; publicly trusted code-signing is not required for the official free
+release pipeline. Authenticode signature verification is optional and disabled
+by default — set `RequireAuthenticodeSignature` to require a valid signature
+before staging or applying.
 
 ---
 
@@ -385,8 +389,8 @@ write it to `%APPDATA%\Astral\settings.json`:
   "Update": {
     "Repository": "CRZX1337/Astral-ValoTool",
     "CheckOnStartup": true,
-    "IncludePrereleases": false,
-    "RequireAuthenticodeSignature": true
+"IncludePrereleases": false,
+    "RequireAuthenticodeSignature": false
   }
 }
 ```
@@ -396,7 +400,7 @@ write it to `%APPDATA%\Astral\settings.json`:
 | `Repository` | string | `owner/repo` to watch. A blank value falls back to the default rather than failing every check. |
 | `CheckOnStartup` | boolean | Check once, six seconds after launch. Turn it off and only manual checks run. |
 | `IncludePrereleases` | boolean | Whether a prerelease counts as an update. Off by default. |
-| `RequireAuthenticodeSignature` | boolean | Reject downloaded executables without a valid Authenticode signature. On by default. |
+| `RequireAuthenticodeSignature` | boolean | Require a valid Authenticode signature before staging or applying an executable. Off by default — the SHA-256 checksum is always verified regardless. |
 | `RequiredSignerSubject` | string | Optional exact Authenticode certificate subject. Empty means any valid trusted signer. |
 | `SkippedVersion` | string | Set by the banner's "Skip". That one version stays silent; later ones don't. |
 

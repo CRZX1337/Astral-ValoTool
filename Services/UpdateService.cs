@@ -399,8 +399,8 @@ public sealed class UpdateService : IModuleStateSource, IDisposable
 
     /// <summary>
     /// Which attachment to download. A single-file build is the whole product,
-    /// so a bare .exe is preferred; a .zip is accepted as a fallback but cannot
-    /// be applied in place, and the UI sends the user to the release page for it.
+    /// so the release must carry an exact <c>Astral.exe</c> together with its
+    /// <c>Astral.exe.sha256</c> checksum; anything else means no update.
     /// </summary>
     internal static ReleaseDownload? PickAsset(Release release)
     {
@@ -497,17 +497,21 @@ public sealed class UpdateService : IModuleStateSource, IDisposable
             string path = await FetchAssetAsync(asset!.Executable, token).ConfigureAwait(false);
             byte[] expectedHash = await FetchAndParseChecksumAsync(asset.Checksum, token).ConfigureAwait(false);
 
-            if (!await UpdateVerification.MatchesSha256Async(path, expectedHash, token).ConfigureAwait(false))
+            bool sha256Matches = await UpdateVerification.MatchesSha256Async(path, expectedHash, token).ConfigureAwait(false);
+            UpdateOptions options = _optionsStore.Current.Update;
+            bool hasValidAuthenticode = false;
+
+            if (options.RequireAuthenticodeSignature)
             {
-                throw new InvalidDataException("The downloaded Astral.exe does not match Astral.exe.sha256.");
+                hasValidAuthenticode = UpdateVerification.HasValidAuthenticode(path, options.RequiredSignerSubject);
             }
 
-            UpdateOptions options = _optionsStore.Current.Update;
-
-            if (options.RequireAuthenticodeSignature &&
-                !UpdateVerification.HasValidAuthenticode(path, options.RequiredSignerSubject))
+            if (!UpdateVerification.PassesIntegrityGate(sha256Matches, options.RequireAuthenticodeSignature, hasValidAuthenticode))
             {
-                throw new InvalidDataException("The downloaded Astral.exe does not have a valid Authenticode signature.");
+                throw new InvalidDataException(
+                    !sha256Matches
+                        ? "The downloaded Astral.exe does not match Astral.exe.sha256."
+                        : "The downloaded Astral.exe does not have a valid Authenticode signature.");
             }
 
             lock (_sync)
@@ -718,16 +722,55 @@ public sealed class UpdateService : IModuleStateSource, IDisposable
         }
 
         string backup = running + ".old";
+        string destination = running + "." + Guid.NewGuid().ToString("N") + ".new";
+        bool backedUp = false;
+        bool replaced = false;
 
         try
         {
             UpdateOptions options = _optionsStore.Current.Update;
 
-            if (!UpdateVerification.MatchesSha256(staged, expectedHash) ||
-                (options.RequireAuthenticodeSignature &&
-                 !UpdateVerification.HasValidAuthenticode(staged, options.RequiredSignerSubject)))
+            using (FileStream source = UpdateVerification.OpenControlledRead(staged))
             {
-                throw new InvalidDataException("The staged Astral.exe failed integrity or Authenticode verification.");
+                bool stagedHasValidAuthenticode = false;
+
+                if (options.RequireAuthenticodeSignature)
+                {
+                    stagedHasValidAuthenticode = UpdateVerification.HasValidAuthenticode(staged, options.RequiredSignerSubject);
+                }
+
+                if (!UpdateVerification.PassesIntegrityGate(
+                        UpdateVerification.MatchesSha256(source, expectedHash),
+                        options.RequireAuthenticodeSignature,
+                        stagedHasValidAuthenticode))
+                {
+                    throw new InvalidDataException("The staged Astral.exe failed integrity or Authenticode verification.");
+                }
+
+                using FileStream copy = new(
+                    destination,
+                    FileMode.CreateNew,
+                    FileAccess.Write,
+                    FileShare.Read,
+                    bufferSize: 81920,
+                    options: FileOptions.SequentialScan);
+                source.CopyTo(copy);
+                copy.Flush(flushToDisk: true);
+            }
+
+            bool destinationHasValidAuthenticode = false;
+
+            if (options.RequireAuthenticodeSignature)
+            {
+                destinationHasValidAuthenticode = UpdateVerification.HasValidAuthenticode(destination, options.RequiredSignerSubject);
+            }
+
+            if (!UpdateVerification.PassesIntegrityGate(
+                    UpdateVerification.MatchesSha256(destination, expectedHash),
+                    options.RequireAuthenticodeSignature,
+                    destinationHasValidAuthenticode))
+            {
+                throw new InvalidDataException("The copied Astral.exe failed integrity or Authenticode verification.");
             }
 
             if (File.Exists(backup))
@@ -736,23 +779,41 @@ public sealed class UpdateService : IModuleStateSource, IDisposable
             }
 
             File.Move(running, backup);
+            backedUp = true;
 
             try
             {
-                File.Copy(staged, running, overwrite: true);
+                File.Move(destination, running);
+                replaced = true;
             }
             catch
             {
-                // Put the working binary back before giving up; a failure here
-                // must not leave the user with no executable at all.
-                File.Move(backup, running, overwrite: true);
+                RestorePreviousExecutable(running, backup);
+                backedUp = false;
                 throw;
             }
 
-            Process.Start(new ProcessStartInfo(running) { UseShellExecute = true });
+            try
+            {
+                Process.Start(new ProcessStartInfo(running) { UseShellExecute = true });
+            }
+            catch
+            {
+                RestorePreviousExecutable(running, backup);
+                backedUp = false;
+                replaced = false;
+                throw;
+            }
         }
         catch (Exception ex)
         {
+            if (backedUp && !replaced)
+            {
+                RestorePreviousExecutable(running, backup);
+            }
+
+            TryDelete(destination);
+
             Mutate(state => state with
             {
                 Stage = UpdateStage.Failed,
@@ -761,6 +822,8 @@ public sealed class UpdateService : IModuleStateSource, IDisposable
             });
             return false;
         }
+
+        TryDelete(destination);
 
         Mutate(state => state with
         {
@@ -771,6 +834,41 @@ public sealed class UpdateService : IModuleStateSource, IDisposable
 
         RestartRequested?.Invoke();
         return true;
+    }
+
+    private static void RestorePreviousExecutable(string running, string backup)
+    {
+        try
+        {
+            if (File.Exists(running))
+            {
+                File.Delete(running);
+            }
+
+            if (File.Exists(backup))
+            {
+                File.Move(backup, running, overwrite: true);
+            }
+        }
+        catch
+        {
+            // The original failure is reported by the caller. Restoration is
+            // best effort because Windows may keep a replacement file locked.
+        }
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
     }
 
     /// <summary>

@@ -29,46 +29,18 @@ jobs:
       - name: Test
         run: dotnet test Astral.sln -c Release --no-build --no-restore
 
-      - name: Validate signing configuration
-        shell: pwsh
-        env:
-          ASTRAL_SIGNING_CERTIFICATE: ${{ secrets.ASTRAL_SIGNING_CERTIFICATE }}
-          ASTRAL_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.ASTRAL_SIGNING_CERTIFICATE_PASSWORD }}
-        run: |
-          if ([string]::IsNullOrWhiteSpace($env:ASTRAL_SIGNING_CERTIFICATE) -or
-              [string]::IsNullOrWhiteSpace($env:ASTRAL_SIGNING_CERTIFICATE_PASSWORD)) {
-            throw "Release signing is not configured. Set ASTRAL_SIGNING_CERTIFICATE and ASTRAL_SIGNING_CERTIFICATE_PASSWORD before creating a tag release."
-          }
-
       - name: Publish
-        run: dotnet publish Astral.csproj -p:PublishProfile=SingleFile --no-restore
-
-      - name: Import signing certificate
         shell: pwsh
-        env:
-          ASTRAL_SIGNING_CERTIFICATE: ${{ secrets.ASTRAL_SIGNING_CERTIFICATE }}
-          ASTRAL_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.ASTRAL_SIGNING_CERTIFICATE_PASSWORD }}
         run: |
-          $certificatePath = Join-Path $env:RUNNER_TEMP "astral-signing.pfx"
-          [Convert]::FromBase64String($env:ASTRAL_SIGNING_CERTIFICATE) | Set-Content -Path $certificatePath -AsByteStream
-          $certificate = Import-PfxCertificate -FilePath $certificatePath -CertStoreLocation Cert:\CurrentUser\My -Password (ConvertTo-SecureString $env:ASTRAL_SIGNING_CERTIFICATE_PASSWORD -AsPlainText -Force)
-          if ($null -eq $certificate) { throw "The configured signing certificate could not be imported." }
-          "ASTRAL_SIGNING_THUMBPRINT=$($certificate.Thumbprint)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          "CERTIFICATE_PATH=$certificatePath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          dotnet restore Astral.csproj -r win-x64
+          if ($LASTEXITCODE -ne 0) { throw "Runtime-specific restore failed." }
+          dotnet publish Astral.csproj -p:PublishProfile=SingleFile --no-restore
 
-      - name: Sign executable
+      - name: Verify published executable
         shell: pwsh
-        env:
-          ASTRAL_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.ASTRAL_SIGNING_CERTIFICATE_PASSWORD }}
         run: |
           $executable = Join-Path $pwd "bin\Publish\SingleFile\Astral.exe"
           if (-not (Test-Path $executable)) { throw "Publish did not produce Astral.exe." }
-          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter signtool.exe -Recurse | Sort-Object FullName -Descending | Select-Object -First 1
-          if ($null -eq $signtool) { throw "signtool.exe was not found on the release runner." }
-          & $signtool.FullName sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /sha1 $env:ASTRAL_SIGNING_THUMBPRINT $executable
-          if ($LASTEXITCODE -ne 0) { throw "Authenticode signing failed." }
-          $signature = Get-AuthenticodeSignature $executable
-          if ($signature.Status -ne "Valid") { throw "The published executable is not Authenticode-valid after signing: $($signature.Status)." }
 
       - name: Generate checksum
         shell: pwsh
