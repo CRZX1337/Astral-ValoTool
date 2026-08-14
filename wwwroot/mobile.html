@@ -11,10 +11,19 @@
   <link rel="icon" href="/logo.png">
   <link rel="stylesheet" href="/css/mobile.css">
 </head>
-<body data-tab="home">
-  <!-- The phone companion: a read-only second screen for the desktop app.
-       Opened from the desktop's "Open on phone" panel. No instalock, no
-       auto-queue, no lobby intel -- this page looks, it does not touch. -->
+<body data-page="home" data-sub="hub">
+  <!-- The phone companion: a full control surface for the desktop app. Opened
+       from the desktop's "Open on phone" panel. Reads the same event stream
+       the desktop feeds and can arm the instalock, drive the auto-queue and
+       reset the session -- every write goes through the LAN gate exactly like
+       the desktop's own routes.
+
+       Routing: Home / Session / Matches / Maps / Agents / Instalock / More
+       are separate destinations, one mounted in #page at a time. The shell
+       below (appbar, status line, bottom nav) never unmounts; the pages live
+       in <template> elements and are cloned in by the router when their hash
+       route is entered:  /mobile.html#/session  and so on. Deep links and
+       refresh land straight on the route the hash names. -->
 
   <header class="appbar">
     <div class="appbar-brand">
@@ -27,9 +36,44 @@
     </span>
   </header>
 
-  <main class="page" id="page">
-    <!-- ================= Home ================= -->
-    <section class="tab" id="tab-home" data-tab="home">
+  <p class="status-line shell-status" id="statusLine">Loading…</p>
+
+  <main class="page" id="page"></main>
+
+  <nav class="tabs" aria-label="Sections">
+    <button class="tab-btn" type="button" data-go="home" aria-label="Home" aria-current="page">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5 12 4l8 6.5V20h-5.5v-5h-5v5H4z"></path></svg>
+      <span>Home</span>
+    </button>
+    <button class="tab-btn" type="button" data-go="session" aria-label="Session">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7.5V12l3 2.5"></path></svg>
+      <span>Session</span>
+    </button>
+    <button class="tab-btn" type="button" data-go="matches" aria-label="Matches">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5"></path><path d="M4 19h16"></path><path d="m7.5 15 3.5-4 3 2.5L20 7"></path></svg>
+      <span>Matches</span>
+    </button>
+    <button class="tab-btn" type="button" data-go="maps" aria-label="Maps">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-5.4-7-11a7 7 0 0 1 14 0c0 5.6-7 11-7 11z"></path><circle cx="12" cy="10" r="2.5"></circle></svg>
+      <span>Maps</span>
+    </button>
+    <button class="tab-btn" type="button" data-go="agents" aria-label="Agents">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="7" r="2.5"></circle><path d="M4.5 17a4.5 4.5 0 0 1 9 0"></path><path d="M15 6.5h5"></path><path d="M15 10h5"></path><path d="M15 13.5h5"></path></svg>
+      <span>Agents</span>
+    </button>
+    <button class="tab-btn" type="button" data-go="instalock" aria-label="Instalock">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"></circle><path d="M12 2v4M12 18v4M2 12h4M18 12h4"></path><circle cx="12" cy="12" r="1.5"></circle></svg>
+      <span>Instalock</span>
+    </button>
+    <button class="tab-btn" type="button" data-go="more" aria-label="More">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.5"></circle><circle cx="12" cy="12" r="1.5"></circle><circle cx="19" cy="12" r="1.5"></circle></svg>
+      <span>More</span>
+    </button>
+  </nav>
+
+  <!-- ================= Home ================= -->
+  <template id="page-home">
+    <section class="page-view" data-page="home">
       <div class="card rank-card" id="rankCard" hidden>
         <div class="rank-row">
           <div class="rank-badge">
@@ -59,22 +103,82 @@
         <p class="streak-line" id="streakLine" hidden></p>
       </div>
 
-      <p class="status-line" id="statusLine">Loading…</p>
+      <!-- Compact links into the pages that own the full content. Home is an
+           overview, not a second copy of any of them. -->
+      <div class="quick-links" id="quickLinks" aria-label="Go to">
+        <button class="ql-btn" type="button" data-go="session"><span class="ql-ico">◎</span>Session</button>
+        <button class="ql-btn" type="button" data-go="instalock"><span class="ql-ico">⌖</span>Instalock</button>
+        <button class="ql-btn" type="button" data-go="matches"><span class="ql-ico">≋</span>Matches</button>
+        <button class="ql-btn" type="button" data-go="more"><span class="ql-ico">⋯</span>More</button>
+      </div>
 
-      <div class="card">
+      <div class="card latest-card" id="latestCard">
         <div class="card-head">
-          <span class="card-title">Recent</span>
-          <span class="card-sub" id="recentWhen"></span>
+          <span class="card-title">Latest match</span>
+          <button class="card-link" id="latestMore" type="button" data-go="matches">All →</button>
         </div>
-        <div class="mini-matches" id="recentList"></div>
-        <p class="empty" id="recentEmpty">Refresh to load your recent matches.</p>
+        <div class="mini-matches" id="latestList"></div>
+        <p class="empty" id="latestEmpty">Refresh to load your recent matches.</p>
       </div>
 
       <div class="chips" id="topChips"></div>
     </section>
+  </template>
 
-    <!-- ================= Matches ================= -->
-    <section class="tab" id="tab-matches" data-tab="matches" hidden>
+  <!-- ================= Session ================= -->
+  <template id="page-session">
+    <section class="page-view" data-page="session">
+      <div class="list-head">
+        <span class="list-title">Session</span>
+        <span class="list-sub" id="sessionUpdated">Not loaded yet.</span>
+      </div>
+      <p class="scope">Your own competitive matches since the session started — not global winrates.</p>
+
+      <div class="card session-hero-card" id="sessionHeroCard" hidden>
+        <div class="session-hero">
+          <div class="session-hero-main">
+            <span class="session-hero-label">Net RR</span>
+            <span class="session-hero-rr" id="sessNet">0</span>
+            <span class="session-hero-meta" id="sessPlayed">0 matches</span>
+          </div>
+          <div class="session-nums session-hero-grid">
+            <div class="session-num"><span class="num" id="sessWins">0</span><span class="lbl">wins</span></div>
+            <div class="session-num"><span class="num" id="sessLosses">0</span><span class="lbl">losses</span></div>
+            <div class="session-num"><span class="num" id="sessDraws">0</span><span class="lbl">draws</span></div>
+            <div class="session-num"><span class="num" id="sessWinrate">—</span><span class="lbl">winrate</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="sessionStatsCard" hidden>
+        <div class="card-head"><span class="card-title">Details</span></div>
+        <dl class="session-stats">
+          <div><dt>Avg RR</dt><dd id="sessAvg">—</dd></div>
+          <div><dt>Best / Worst</dt><dd id="sessBestWorst">—</dd></div>
+          <div><dt>Streak</dt><dd id="sessStreak">—</dd></div>
+          <div><dt>Longest run</dt><dd id="sessLongest">—</dd></div>
+          <div><dt>Span</dt><dd id="sessSpan">—</dd></div>
+          <div><dt>Momentum</dt><dd id="sessMomentum">—</dd></div>
+        </dl>
+        <div class="form-row" id="sessForm"></div>
+      </div>
+
+      <div class="card" id="sessionResetCard" hidden>
+        <div class="card-head">
+          <span class="card-title">Reset session</span>
+          <span class="card-sub">Starts a fresh session anchor.</span>
+        </div>
+        <p class="session-reset-note" id="sessResetNote" role="status"></p>
+        <button class="btn btn-quiet" id="sessReset" type="button">Reset session</button>
+      </div>
+
+      <p class="empty" id="sessEmpty" hidden>Refresh to load your recent matches.</p>
+    </section>
+  </template>
+
+  <!-- ================= Matches ================= -->
+  <template id="page-matches">
+    <section class="page-view" data-page="matches">
       <div class="list-head">
         <span class="list-title">Matches</span>
         <span class="list-sub" id="matchesUpdated">Not loaded yet.</span>
@@ -83,9 +187,11 @@
       <div class="match-list" id="matchList"></div>
       <p class="empty" id="matchEmpty">Refresh to load your recent matches.</p>
     </section>
+  </template>
 
-    <!-- ================= Maps ================= -->
-    <section class="tab" id="tab-maps" data-tab="maps" hidden>
+  <!-- ================= Maps ================= -->
+  <template id="page-maps">
+    <section class="page-view" data-page="maps">
       <div class="list-head">
         <span class="list-title">Maps</span>
         <span class="list-sub" id="mapsUpdated">Not loaded yet.</span>
@@ -94,9 +200,11 @@
       <div class="map-cards" id="mapCards"></div>
       <p class="empty" id="mapsEmpty" hidden>Refresh to load your recent matches.</p>
     </section>
+  </template>
 
-    <!-- ================= Agents ================= -->
-    <section class="tab" id="tab-agents" data-tab="agents" hidden>
+  <!-- ================= Agents ================= -->
+  <template id="page-agents">
+    <section class="page-view" data-page="agents">
       <div class="list-head">
         <span class="list-title">Agents</span>
         <span class="list-sub" id="agentsUpdated">Not loaded yet.</span>
@@ -109,26 +217,145 @@
       </div>
       <p class="empty" id="agentsEmpty" hidden>Refresh to load your recent matches.</p>
     </section>
-  </main>
+  </template>
 
-  <nav class="tabs" aria-label="Sections">
-    <button class="tab-btn" type="button" data-tab="home" aria-label="Home" aria-current="page">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5 12 4l8 6.5V20h-5.5v-5h-5v5H4z"></path></svg>
-      <span>Home</span>
-    </button>
-    <button class="tab-btn" type="button" data-tab="matches" aria-label="Matches">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5"></path><path d="M4 19h16"></path><path d="m7.5 15 3.5-4 3 2.5L20 7"></path></svg>
-      <span>Matches</span>
-    </button>
-    <button class="tab-btn" type="button" data-tab="maps" aria-label="Maps">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-5.4-7-11a7 7 0 0 1 14 0c0 5.6-7 11-7 11z"></path><circle cx="12" cy="10" r="2.5"></circle></svg>
-      <span>Maps</span>
-    </button>
-<button class="tab-btn" type="button" data-tab="agents" aria-label="Agents">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="7" r="2.5"></circle><path d="M4.5 17a4.5 4.5 0 0 1 9 0"></path><path d="M15 6.5h5"></path><path d="M15 10h5"></path><path d="M15 13.5h5"></path></svg>
-      <span>Agents</span>
-    </button>
-  </nav>
+  <!-- ================= Instalock ================= -->
+  <template id="page-instalock">
+    <section class="page-view" data-page="instalock">
+      <div class="list-head">
+        <span class="list-title">Instalock</span>
+        <span class="list-sub" id="ilUpdated">—</span>
+      </div>
+      <p class="scope">Pick agents for the fallback chain and arm the lock. Whoever is free first gets locked.</p>
+
+      <div class="card">
+        <div class="card-head">
+          <span class="phase-chip" id="ilPhase" data-phase="booting">Booting</span>
+          <span class="card-sub" id="ilLocked" hidden>Locked: —</span>
+        </div>
+        <p class="status-line" id="ilStatus">Loading agents…</p>
+        <p class="il-alert" id="ilError" role="alert" hidden></p>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <span class="card-title">Fallback chain</span>
+          <span class="card-sub" id="ilChainCount">—</span>
+        </div>
+        <ol class="chain-list" id="chainList"></ol>
+        <p class="empty" id="chainEmpty">Tap agents below to build the order — first tap is the first choice.</p>
+        <p class="chain-hint" id="chainHint" hidden>Tried top to bottom; whoever is free first gets locked.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <span class="card-title">Agents</span>
+          <span class="card-sub" id="ilPickCount">—</span>
+        </div>
+        <label class="search" for="ilSearch">
+          <input id="ilSearch" type="search" placeholder="Filter agents" autocomplete="off" spellcheck="false"
+                 aria-label="Filter agents">
+        </label>
+        <div class="il-grid" id="ilGrid"></div>
+        <p class="empty" id="ilGridEmpty" hidden>No agent matches this filter.</p>
+      </div>
+
+      <div class="card">
+        <button class="btn btn-primary" id="ilStart" type="button" disabled>
+          <span id="ilStartLabel">Start locking</span>
+        </button>
+        <button class="btn btn-danger" id="ilStop" type="button" disabled>Stop</button>
+      </div>
+    </section>
+  </template>
+
+  <!-- ================= More ================= -->
+  <template id="page-more">
+    <section class="page-view" data-page="more">
+      <!-- Hub: the entry list, not a content dump. -->
+      <div class="more-hub" id="moreHub">
+        <div class="list-head">
+          <span class="list-title">More</span>
+          <span class="list-sub">Tools</span>
+        </div>
+        <button class="hub-card" id="aqEntry" type="button">
+          <span class="hub-ico" aria-hidden="true">≋</span>
+          <span class="hub-body">
+            <span class="hub-title">AutoQueue</span>
+            <span class="hub-sub" id="aqEntrySub">Idle.</span>
+          </span>
+          <span class="hub-arrow" aria-hidden="true">›</span>
+        </button>
+        <button class="hub-card" id="intelEntry" type="button">
+          <span class="hub-ico" aria-hidden="true">◎</span>
+          <span class="hub-body">
+            <span class="hub-title">Lobby Intel</span>
+            <span class="hub-sub" id="intelEntrySub">Not watching.</span>
+          </span>
+          <span class="hub-arrow" aria-hidden="true">›</span>
+        </button>
+      </div>
+
+      <!-- AutoQueue sub-page -->
+      <div class="more-sub" id="sub-autoqueue" hidden>
+        <button class="sub-back" id="aqBack" type="button">‹ More</button>
+        <div class="list-head">
+          <span class="list-title">AutoQueue</span>
+          <span class="list-sub" id="aqUpdated">—</span>
+        </div>
+        <p class="scope">Re-enters the queue for you while you wait in menus.</p>
+        <p class="il-alert" id="aqError" role="alert" hidden></p>
+        <div class="card">
+          <div class="card-head">
+            <span class="phase-chip" id="aqPhase" data-phase="idle">Idle</span>
+            <span class="card-sub" id="aqRequeues">—</span>
+          </div>
+          <p class="status-line" id="aqStatus">Idle.</p>
+        </div>
+        <div class="card">
+          <dl class="session-stats">
+            <div><dt>Party</dt><dd id="aqParty">—</dd></div>
+            <div><dt>Queue</dt><dd id="aqQueue">—</dd></div>
+            <div><dt>Requeues</dt><dd id="aqRequeueCount">0</dd></div>
+            <div><dt>Stop after limit</dt><dd id="aqLimit">—</dd></div>
+          </dl>
+        </div>
+        <div class="card">
+          <button class="btn btn-primary" id="aqStart" type="button">
+            <span id="aqStartLabel">Start</span>
+          </button>
+          <button class="btn btn-danger" id="aqStop" type="button" disabled>Stop</button>
+        </div>
+      </div>
+
+      <!-- Lobby intel sub-page -->
+      <div class="more-sub" id="sub-intel" hidden>
+        <button class="sub-back" id="intelBack" type="button">‹ More</button>
+        <div class="list-head">
+          <span class="list-title">Lobby Intel</span>
+          <span class="list-sub" id="intelMap">—</span>
+        </div>
+        <p class="scope">Read from your own client. Players who play incognito stay unnamed.</p>
+        <p class="il-alert" id="intelError" role="alert" hidden></p>
+        <div class="card">
+          <div class="card-head">
+            <span class="phase-chip" id="intelPhase" data-phase="idle">Not watching</span>
+            <span class="card-sub" id="intelTimer" hidden>—</span>
+          </div>
+          <p class="status-line" id="intelStatus">Not watching.</p>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <span class="card-title">Your team</span>
+            <span class="card-sub" id="intelLocked" hidden></span>
+          </div>
+          <div class="lobby-list" id="lobbyList"></div>
+          <p class="empty" id="lobbyEmpty">Open agent select and your team will appear here.</p>
+        </div>
+      </div>
+    </section>
+  </template>
+
   <script type="module" src="/js/mobile/main.js"></script>
 </body>
 </html>

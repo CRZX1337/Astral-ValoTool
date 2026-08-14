@@ -1,8 +1,10 @@
 /**
- * The phone's home tab: rank, today's session, the most recent matches, and
- * the two "best of" chips. Every number comes from the tracker module state
- * that the stream (or the polling fallback) already holds -- this page makes
- * no data requests of its own.
+ * The phone's home tab: rank, a concise session summary, the latest match,
+ * and the two "best of" chips. Every number comes from the tracker module
+ * state that the stream (or the polling fallback) already holds -- this page
+ * makes no data requests of its own, and it deliberately does not duplicate
+ * the full sections the Session, Matches, Maps, Agents and Instalock tabs
+ * own.
  */
 
 import { aggregateMapStats } from "../stats/map-stats.js";
@@ -33,9 +35,8 @@ export function mountHome() {
   const formRow = document.getElementById("formRow");
   const streakLine = document.getElementById("streakLine");
 
-  const recentList = document.getElementById("recentList");
-  const recentEmpty = document.getElementById("recentEmpty");
-  const recentWhen = document.getElementById("recentWhen");
+  const latestList = document.getElementById("latestList");
+  const latestEmpty = document.getElementById("latestEmpty");
   const topChips = document.getElementById("topChips");
 
   let recentSignature = null;
@@ -48,30 +49,29 @@ export function mountHome() {
     paintRank(tracker?.rank ?? null);
     paintSession(tracker, sessionAnalytics(matches, tracker?.session ?? null));
 
-    // The recent list only repaints when the match set actually changed;
-    // the stream frames in once a second otherwise. The agents version is
-    // part of the signature because agents can land after the first tracker
-    // render at boot -- without it, names would stay as raw ids forever.
-    const recent = matches.slice(0, 5);
-    const signature = recent
+    // The latest-match row only repaints when the newest match actually
+    // changed; the stream frames in once a second otherwise. The agents
+    // version is part of the signature because agents can land after the
+    // first tracker render at boot -- without it, names would stay as raw
+    // ids forever.
+    const latest = matches.slice(0, 1);
+    const signature = latest
       .map((match) => `${match.matchId}:${match.rrChange}:${match.agentId ?? ""}`)
       .join("|") + agentsVersion(state.agents);
 
     if (signature !== recentSignature) {
       recentSignature = signature;
-      paintRecent(recent, byId);
+      paintLatest(latest, byId);
       paintChips(matches, byId);
     }
 
-    recentEmpty.hidden = recent.length > 0;
+    latestEmpty.hidden = latest.length > 0;
 
-    if (recent.length === 0) {
-      recentEmpty.textContent = tracker?.updatedAt
+    if (latest.length === 0) {
+      latestEmpty.textContent = tracker?.updatedAt
         ? "No competitive matches found."
         : "Refresh to load your recent matches.";
     }
-
-    swapText(recentWhen, tracker?.updatedAt ? `Updated ${relativeTime(tracker.updatedAt)}` : "");
   };
 
   function paintRank(rank) {
@@ -129,14 +129,14 @@ export function mountHome() {
     }
   }
 
-  function paintRecent(matches, byId) {
-    recentList.textContent = "";
+  function paintLatest(matches, byId) {
+    latestList.textContent = "";
 
     for (const match of matches) {
-      recentList.appendChild(matchRow(match, byId));
+      latestList.appendChild(matchRow(match, byId));
     }
 
-    stagger(recentList.children);
+    stagger(latestList.children);
   }
 
   function paintChips(matches, byId) {

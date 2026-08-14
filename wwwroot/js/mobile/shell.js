@@ -1,10 +1,17 @@
 /**
- * The phone shell: which tab is on screen, the connection pill, and the live
- * status line on Home. Tabs are plain hidden toggles -- the companion is a
- * read-only mirror, so there is nothing to build or tear down.
+ * The phone shell: the connection pill, the live status line, and the
+ * document-level navigation delegation that turns any [data-go] tap into a
+ * route change. The shell is permanent -- it mounts once at boot and never
+ * unmounts, while feature pages come and go underneath it.
+ *
+ * Navigation is hash-based (see router.js): [data-go="session"] becomes
+ * location.hash = "#/session", the router mounts Session and unmounts
+ * whatever was active before. Everything else on the page -- bottom nav
+ * buttons and Home's quick links alike -- goes through the same path.
  */
 
 import { errorMessage, phase } from "../store.js";
+import { navigate } from "./router.js";
 
 const CONN_LABELS = {
   stream: "Connected",
@@ -24,35 +31,15 @@ const PHASE_TEXT = {
 };
 
 export function mountMobileShell() {
-  const sections = new Map();
-  const buttons = new Map();
+  // One delegated listener for every [data-go] tap, wherever it lives:
+  // bottom nav (permanent), quick links (Home), card links (Latest match).
+  document.addEventListener("click", (event) => {
+    const go = event.target.closest("[data-go]");
 
-  for (const section of document.querySelectorAll(".tab[data-tab]")) {
-    sections.set(section.dataset.tab, section);
-  }
-
-  for (const button of document.querySelectorAll(".tab-btn")) {
-    buttons.set(button.dataset.tab, button);
-    button.addEventListener("click", () => setTab(button.dataset.tab));
-  }
-
-  function setTab(name) {
-    document.body.dataset.tab = name;
-
-    for (const [tab, section] of sections) {
-      section.hidden = tab !== name;
+    if (go?.dataset.go) {
+      navigate(go.dataset.go);
     }
-
-    for (const [tab, button] of buttons) {
-      if (tab === name) {
-        button.setAttribute("aria-current", "page");
-      } else {
-        button.removeAttribute("aria-current");
-      }
-    }
-
-    window.scrollTo(0, 0);
-  }
+  });
 
   const pill = document.getElementById("connPill");
   const connLabel = document.getElementById("connLabel");
@@ -73,7 +60,7 @@ export function mountMobileShell() {
 
 /**
  * Compact "how long ago" for the updated lines: seconds, minutes, hours, then
- * a plain date. Shared by every tab so they all phrase it identically.
+ * a plain date. Shared by every page so they all phrase it identically.
  */
 export function relativeTime(value) {
   if (!value) {

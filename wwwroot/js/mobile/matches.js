@@ -4,6 +4,7 @@
  * so both always look the same.
  */
 
+import { agentLookup } from "../stats/agent-stats.js";
 import { stagger, swapText } from "../ui/motion.js";
 import { agentsVersion, matchRow } from "./home.js";
 import { relativeTime } from "./shell.js";
@@ -18,7 +19,9 @@ export function mountMatches() {
   return function render(state) {
     const tracker = state.tracker;
     const matches = tracker?.matches ?? [];
-    const byId = new Map((state.agents ?? []).map((agent) => [agent.value, agent]));
+    // uuid -> record, the shared resolver: match history reports Riot
+    // character uuids, so a slug-only lookup would never resolve them.
+    const byId = agentLookup(state.agents);
 
     const signature = matches.map((match) => `${match.matchId}:${match.rrChange}:${match.agentId ?? ""}`).join("|") + agentsVersion(state.agents);
 
