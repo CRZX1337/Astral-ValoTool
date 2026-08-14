@@ -1,5 +1,9 @@
+using System.Net;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
+using Microsoft.AspNetCore.HostFiltering;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http.Features;
@@ -39,7 +43,14 @@ internal static class Program
     private static async Task RunAsync(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
-        builder.WebHost.UseUrls("http://127.0.0.1:0");
+        // Every interface, random port: the LAN companion must be reachable
+        // from a phone, and the loopback-only bind the app used to have would
+        // 404 the phone at the socket level. Nothing on the network is trusted
+        // until the user flips the switch -- the LanGate middleware below
+        // refuses every non-loopback /api request while it is off, and demands
+        // the pairing token while it is on. The desktop window still talks to
+        // 127.0.0.1, which is exempt, so the local experience is unchanged.
+        builder.WebHost.UseUrls("http://0.0.0.0:0");
 
         builder.Services.Configure<InstalockerOptions>(
             builder.Configuration.GetSection(InstalockerOptions.SectionName));
@@ -47,6 +58,8 @@ internal static class Program
             builder.Configuration.GetSection(AutoQueueOptions.SectionName));
         builder.Services.Configure<UpdateOptions>(
             builder.Configuration.GetSection(UpdateOptions.SectionName));
+        builder.Services.Configure<MobileOptions>(
+            builder.Configuration.GetSection(MobileOptions.SectionName));
         builder.Services.AddSingleton<ValorantConnection>();
         builder.Services.AddSingleton<OptionsStore>();
         builder.Services.AddSingleton<InstalockerService>();
@@ -54,6 +67,7 @@ internal static class Program
         builder.Services.AddSingleton<AutoQueueService>();
         builder.Services.AddSingleton<PreGameIntelService>();
         builder.Services.AddSingleton<UpdateService>();
+        builder.Services.AddSingleton<LanCompanionService>();
 
         // Each tool is resolvable both by its own type (routes want the real
         // thing) and as a stream source (/api/events wants them all).
@@ -62,6 +76,24 @@ internal static class Program
         builder.Services.AddSingleton<IModuleStateSource>(sp => sp.GetRequiredService<AutoQueueService>());
         builder.Services.AddSingleton<IModuleStateSource>(sp => sp.GetRequiredService<PreGameIntelService>());
         builder.Services.AddSingleton<IModuleStateSource>(sp => sp.GetRequiredService<UpdateService>());
+
+        // Host filtering is normally bound straight off the "AllowedHosts"
+        // config key, which is how the app used to refuse every non-loopback
+        // host before it ever reached a route. That list stays as the base and
+        // the discovered LAN addresses are added on top of it here: without
+        // this, a phone's Host header would still be 400'd even with the
+        // pairing token in hand.
+        builder.Services.AddOptions<HostFilteringOptions>()
+            .Configure<LanCompanionService>((options, lan) =>
+            {
+                foreach (string host in lan.AllowedHosts)
+                {
+                    if (!options.AllowedHosts.Contains(host, StringComparer.OrdinalIgnoreCase))
+                    {
+                        options.AllowedHosts.Add(host);
+                    }
+                }
+            });
 
         // Singleton, not AddHttpClient<T>: a typed client is registered
         // transient, which would give every request its own instance and throw
@@ -76,9 +108,34 @@ internal static class Program
         {
             FileProvider = webFiles
         });
-        app.UseStaticFiles(new StaticFileOptions
+                app.UseStaticFiles(new StaticFileOptions
         {
             FileProvider = webFiles
+        });
+
+        // The LAN gate. Loopback is exempt so the desktop window and local
+        // scripts keep working exactly as before. Anything else reaching /api
+        // needs the LAN switch on AND the pairing token; while the switch is
+        // off every non-loopback /api request is refused outright. Static
+        // assets stay public -- they carry no data, and the token lives in the
+        // mobile page's URL only after the switch is on.
+        LanCompanionService lanCompanion = app.Services.GetRequiredService<LanCompanionService>();
+        app.Use(async (context, next) =>
+        {
+            HttpRequest request = context.Request;
+
+            if (context.Connection.RemoteIpAddress is { } remote &&
+                !IPAddress.IsLoopback(remote) &&
+                request.Path.StartsWithSegments("/api") &&
+                (!lanCompanion.IsLanEnabled || !IsPaired(request, lanCompanion.Token)))
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                await context.Response.WriteAsJsonAsync(
+                    new ErrorResponse("This endpoint is only reachable from this computer or a paired phone."));
+                return;
+            }
+
+            await next(context);
         });
 
         app.MapGet("/api/agents", (InstalockerService service) => TypedResults.Ok(service.GetAgents()));
@@ -107,7 +164,7 @@ internal static class Program
             var payload = localAgents.Select(agent =>
             {
                 remoteAssets.TryGetValue(agent.Value, out AgentAsset? asset);
-                return asset ?? new AgentAsset(agent.Name, agent.Value, null, null, null, [], false);
+                return asset ?? new AgentAsset(agent.Name, agent.Value, null, null, null, [], false, null);
             });
 
             return TypedResults.Ok(payload);
@@ -242,6 +299,39 @@ internal static class Program
             return TypedResults.Ok(updater.GetState());
         }).AddEndpointFilter(RejectForeignOrigin);
 
+        // The LAN companion's control surface. /api/lan/status carries the
+        // pairing token so the desktop panel can build the phone URL and the
+        // QR; it is gated like every other /api route, which keeps it
+        // loopback-only in practice (a non-loopback client would need the very
+        // token it is trying to read).
+        app.MapGet("/api/lan/status", (LanCompanionService lan) => TypedResults.Ok(lan.GetStatus()));
+
+        // Session-scoped by design: the switch returns to the configured
+        // default on relaunch, so a phone URL from a previous run never
+        // silently stays valid.
+        app.MapPost("/api/lan/enable", (LanEnableRequest request, LanCompanionService lan) =>
+        {
+            lan.SetLanEnabled(request.Enabled);
+            return TypedResults.Ok(lan.GetStatus());
+        }).AddEndpointFilter(RejectForeignOrigin);
+
+        app.MapPost("/api/lan/firewall", Results<Ok<LanStatus>, BadRequest<ErrorResponse>> (
+            LanFirewallRequest request,
+            LanCompanionService lan) =>
+        {
+            try
+            {
+                lan.ApplyFirewallRule(request.Add);
+            }
+            catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+            {
+                return TypedResults.BadRequest(new ErrorResponse(
+                    "The firewall rule was not changed. The elevated prompt may have been declined."));
+            }
+
+            return TypedResults.Ok(lan.GetStatus());
+        }).AddEndpointFilter(RejectForeignOrigin);
+
         app.MapGet("/api/autoqueue/options", (OptionsStore store) =>
             TypedResults.Ok(ToAutoQueueResponse(store.Current.AutoQueue)));
         app.MapMethods("/api/autoqueue/options", ["PATCH"], async Task<Results<Ok<AutoQueueOptionsResponse>, BadRequest<ErrorResponse>>> (
@@ -364,7 +454,11 @@ internal static class Program
 
         await app.StartAsync();
 
-        string url = app.Services
+        // The bound address is a wildcard ("http://0.0.0.0:PORT"); the port is
+        // real, the wildcard is not something a browser can navigate to. The
+        // desktop window gets the loopback form of the same listener, and the
+        // LAN companion learns the port so it can build the phone URLs.
+        string boundUrl = app.Services
             .GetRequiredService<IServer>()
             .Features
             .Get<IServerAddressesFeature>()?
@@ -372,10 +466,23 @@ internal static class Program
             .FirstOrDefault()
             ?? "http://127.0.0.1:5000";
 
+        int port = new Uri(boundUrl).Port;
+        lanCompanion.SetPort(port);
+        string url = $"http://127.0.0.1:{port}";
+
         try
         {
             UpdateService updater = app.Services.GetRequiredService<UpdateService>();
             updater.ScheduleStartupCheck();
+
+            // Headless validation runs (the LAN network test suite) keep the
+            // server up without a window owning its lifetime; the tests kill
+            // the process when they are done.
+            if (args.Contains("--no-window", StringComparer.OrdinalIgnoreCase))
+            {
+                await Task.Delay(Timeout.Infinite);
+                return;
+            }
 
             await RunDesktopWindowAsync(
                 url,
@@ -418,6 +525,32 @@ internal static class Program
         }
 
         return await next(context);
+    }
+
+    /// <summary>
+    /// True when the request carries the LAN pairing token, however it was
+    /// delivered: the <c>?k=</c> query the mobile page appends to every fetch
+    /// and to the EventSource URL, the <c>X-Astral-Token</c> header for
+    /// scripts, or the <c>astral_pair</c> cookie. Compared in constant time so
+    /// a LAN snoop cannot learn the token a byte at a time.
+    /// </summary>
+    private static bool IsPaired(HttpRequest request, string token)
+    {
+        string? supplied =
+            request.Query["k"].FirstOrDefault() ??
+            request.Headers["X-Astral-Token"].FirstOrDefault() ??
+            request.Cookies["astral_pair"];
+
+        if (string.IsNullOrEmpty(supplied))
+        {
+            return false;
+        }
+
+        byte[] expected = Encoding.UTF8.GetBytes(token);
+        byte[] actual = Encoding.UTF8.GetBytes(supplied);
+
+        return expected.Length == actual.Length &&
+            CryptographicOperations.FixedTimeEquals(expected, actual);
     }
 
     /// <summary>Legacy shape: the state on its own, with no tool tag.</summary>

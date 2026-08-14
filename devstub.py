@@ -13,15 +13,16 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "wwwroot")
 
+# (name, role, colour, Riot character uuid)
 AGENTS = [
-    ("Jett", "duelist", "#4CE0B3"),
-    ("Raze", "duelist", "#E8B04B"),
-    ("Neon", "duelist", "#3B6FE0"),
-    ("Sova", "initiator", "#5C8FD6"),
-    ("Omen", "controller", "#6E5CD6"),
-    ("Sage", "sentinel", "#4CD6C0"),
-    ("KAY/O", "initiator", "#8A8F98"),
-    ("Reyna", "duelist", "#B04BE8"),
+    ("Jett", "duelist", "#4CE0B3", "add6443a-41bd-e414-f6ad-e58d267f4e95"),
+    ("Raze", "duelist", "#E8B04B", "f94c3b30-42be-e959-889c-5aa313dba261"),
+    ("Neon", "duelist", "#3B6FE0", "bb2a4828-46eb-8cd1-e765-15848195d751"),
+    ("Sova", "initiator", "#5C8FD6", "320b2a48-4d9b-a075-30f1-1f93a9b638fa"),
+    ("Omen", "controller", "#6E5CD6", "8e253930-4c05-31dd-1b6c-968525494517"),
+    ("Sage", "sentinel", "#4CD6C0", "569fdd95-4d10-43ab-ca70-79becc718b46"),
+    ("KAY/O", "initiator", "#8A8F98", "601dbbe7-43ce-be57-2a40-4abd24953621"),
+    ("Reyna", "duelist", "#B04BE8", "a3bfb853-43b2-7238-a4f1-ad90e9e46bcc"),
 ]
 
 STATE = {
@@ -135,6 +136,7 @@ def agent_assets():
         {
             "name": name,
             "value": re.sub(r"[^a-z0-9]", "", name.lower()),
+            "uuid": uuid,
             "role": role,
             "roleLabel": role.capitalize(),
             "portrait": None,
@@ -142,7 +144,7 @@ def agent_assets():
             "gradient": [colour],
             "isRightFacing": False,
         }
-        for name, role, colour in AGENTS
+        for name, role, colour, uuid in AGENTS
     ]
 
 
@@ -167,7 +169,7 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/agent-assets":
             return self.send_json(agent_assets())
         if path == "/api/agents":
-            return self.send_json([{"name": n, "value": n.lower()} for n, _, _ in AGENTS])
+            return self.send_json([{"name": n, "value": n.lower(), "uuid": u} for n, _, _, u in AGENTS])
         if path == "/api/state":
             return self.send_json(STATE)
         if path == "/api/options":

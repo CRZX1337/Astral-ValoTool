@@ -1,0 +1,691 @@
+/* ==========================================================================
+   Astral -- mobile phone companion
+   Standalone sheet: the phone page deliberately does not load the desktop
+   styles, so the tokens below are copied from styles.css (they must stay in
+   step with it -- same palette, same result tones).
+
+   1. Tokens          4. Cards           7. Matches
+   2. Base + layout   5. Home            8. Maps + agents
+   3. App bar + tabs  6. Connection pill
+   ========================================================================== */
+
+/* 1. Tokens ============================================================== */
+
+:root {
+  color-scheme: dark;
+
+  --bg-0: #07080b;
+  --bg-1: #0d0f14;
+
+  --surface: rgba(255, 255, 255, 0.045);
+  --hairline: rgba(255, 255, 255, 0.09);
+  --hairline-strong: rgba(255, 255, 255, 0.18);
+
+  --text: #f1f2f6;
+  --text-muted: #9aa1b0;
+  --text-dim: #6a7183;
+
+  --bad: #ff5a68;
+  --bad-soft: rgba(255, 90, 104, 0.12);
+
+  --win: #3ddc97;
+  --warn: #f5c451;
+  --brand: #5bb5ff;
+
+  --radius: 16px;
+  --radius-sm: 12px;
+
+  --tab-h: 58px;
+  --appbar-h: 52px;
+
+  /* Max content width: on tablets and landscape phones a full-width single
+     column reads as a stretched page, so the content centres itself. */
+  --content-w: 560px;
+
+  --ease: cubic-bezier(0.22, 0.68, 0.35, 1);
+}
+
+/* Role accents, same values as the desktop sheet. */
+[data-role="duelist"]    { --accent: #ff5a68; --accent-soft: rgba(255, 90, 104, 0.15); }
+[data-role="initiator"]  { --accent: #f5c451; --accent-soft: rgba(245, 196, 81, 0.15); }
+[data-role="controller"] { --accent: #a97bff; --accent-soft: rgba(169, 123, 255, 0.16); }
+[data-role="sentinel"]   { --accent: #3ddc97; --accent-soft: rgba(61, 220, 151, 0.14); }
+[data-role="unknown"]    { --accent: #8b93a7; --accent-soft: rgba(139, 147, 167, 0.14); }
+
+/* 2. Base + layout ======================================================= */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(120% 60% at 50% -10%, rgba(108, 122, 255, 0.16), transparent 60%),
+    var(--bg-0);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+.page {
+  max-width: var(--content-w);
+  margin: 0 auto;
+  padding: 14px 14px calc(var(--tab-h) + env(safe-area-inset-bottom) + 14px);
+}
+
+.tab {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 100%;
+}
+
+/* 3. App bar + tabs ====================================================== */
+
+.appbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: calc(10px + env(safe-area-inset-top)) 14px 10px;
+  background: color-mix(in srgb, var(--bg-0) 82%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.appbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.appbar-mark {
+  width: 28px;
+  height: 28px;
+}
+
+.appbar-name {
+  font-size: 1.02rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.tabs {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  display: flex;
+  padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--hairline);
+  background: color-mix(in srgb, var(--bg-1) 88%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.tab-btn {
+  /* 44px minimum touch target: 58px bar minus its 6px padding leaves room. */
+  flex: 1;
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  touch-action: manipulation;
+  cursor: pointer;
+}
+
+.tab-btn svg {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tab-btn[aria-current="page"] {
+  color: var(--brand);
+}
+
+/* 4. Cards =============================================================== */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+}
+
+.card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.card-title {
+  font-size: 0.86rem;
+  font-weight: 680;
+  letter-spacing: -0.01em;
+}
+
+.card-sub {
+  color: var(--text-dim);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.list-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 2px 0;
+}
+
+.list-title {
+  font-size: 1.1rem;
+  font-weight: 720;
+  letter-spacing: -0.025em;
+}
+
+.list-sub {
+  color: var(--text-dim);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.scope {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.74rem;
+  line-height: 1.4;
+}
+
+.empty {
+  margin: 0;
+  padding: 18px 12px;
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+/* 5. Home ================================================================ */
+
+.rank-row {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+
+.rank-badge {
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  flex: none;
+  border-radius: 16px;
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.rank-badge img {
+  width: 52px;
+  height: 52px;
+  object-fit: contain;
+}
+
+.rank-badge span {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--text-dim);
+}
+
+.rank-name {
+  font-size: 1.3rem;
+  font-weight: 720;
+  letter-spacing: -0.03em;
+}
+
+.rank-rr {
+  margin-top: 1px;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.rr-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+
+.rr-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--rank-color, var(--brand)) 70%, white 10%),
+    var(--rank-color, var(--brand)));
+}
+
+.session-nums {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.session-num {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 9px 4px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.session-num .num {
+  font-size: 1.05rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.session-num .lbl {
+  color: var(--text-dim);
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.session-num .num.is-up   { color: var(--win); }
+.session-num .num.is-down { color: var(--bad); }
+
+.form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.form-chip {
+  display: grid;
+  place-items: center;
+  width: 21px;
+  height: 21px;
+  border-radius: 6px;
+  font-size: 0.68rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-dim);
+}
+
+.form-chip[data-result="win"]  { background: rgba(61, 220, 151, 0.13); color: var(--win); }
+.form-chip[data-result="loss"] { background: var(--bad-soft); color: var(--bad); }
+
+.streak-line {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+}
+
+.status-line {
+  margin: 0;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.mini-matches {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chips {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.top-chip {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.top-chip .tc-lbl {
+  flex: none;
+  width: 62px;
+  color: var(--text-dim);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.top-chip .tc-name {
+  min-width: 0;
+  font-size: 0.86rem;
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.top-chip .tc-value {
+  margin-left: auto;
+  flex: none;
+  font-size: 0.8rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 6. Connection pill ===================================================== */
+
+.conn-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.conn-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.conn-pill[data-conn="stream"] { color: var(--win); }
+.conn-pill[data-conn="retrying"] { color: var(--warn); }
+.conn-pill[data-conn="polling"] { color: var(--brand); }
+.conn-pill[data-conn="offline"] { color: var(--bad); }
+
+/* 7. Matches ============================================================= */
+
+.match-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.match-row {
+  display: grid;
+  grid-template-columns: 3px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 11px 10px 9px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.match-flag {
+  align-self: stretch;
+  border-radius: 999px;
+  background: var(--text-dim);
+}
+
+.match-row[data-result="win"]  .match-flag { background: var(--win); }
+.match-row[data-result="loss"] .match-flag { background: var(--bad); }
+
+.match-main {
+  min-width: 0;
+}
+
+.match-map {
+  font-size: 0.85rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.match-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  color: var(--text-dim);
+  font-size: 0.7rem;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.match-agent {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.match-agent img {
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  object-fit: cover;
+  flex: none;
+}
+
+.match-agent span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.match-rr {
+  font-size: 0.9rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.match-rr.is-up   { color: var(--win); }
+.match-rr.is-down { color: var(--bad); }
+
+/* 8. Maps + agents ======================================================= */
+
+.map-cards,
+.agent-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.map-card,
+.agent-card {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 13px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+}
+
+.map-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.map-card-name {
+  min-width: 0;
+  flex: 1;
+  font-size: 0.88rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.map-card-name.is-unknown {
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+.map-card-rate {
+  flex: none;
+  font-size: 1.35rem;
+  font-weight: 780;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.map-card-rate.is-up   { color: var(--win); }
+.map-card-rate.is-down { color: var(--bad); }
+
+.agent-card-rate {
+  flex: none;
+  font-size: 1.35rem;
+  font-weight: 780;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.agent-card-rate.is-up   { color: var(--win); }
+.agent-card-rate.is-down { color: var(--bad); }
+
+.map-card-rows,
+.agent-rows {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-dim);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.agent-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.agent-art {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--hairline);
+}
+
+.agent-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.agent-monogram {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--text-dim);
+}
+
+.agent-identity {
+  flex: 1;
+  min-width: 0;
+}
+
+.agent-name {
+  font-size: 0.88rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-name.is-unknown {
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+.best-line {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+/* Card entry, staggered by --i written in js/mobile/*.js. Cheap on purpose:
+   transform + opacity only, capped at 12 items by the stagger helper. */
+.card,
+.map-card,
+.agent-card,
+.match-row,
+.top-chip {
+  animation: card-in 380ms var(--ease) backwards;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .map-card,
+  .agent-card,
+  .match-row,
+  .top-chip {
+    animation: none;
+  }
+}

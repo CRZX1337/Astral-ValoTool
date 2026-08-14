@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0c10">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Astral">
+  <title>Astral</title>
+  <link rel="icon" href="/logo.png">
+  <link rel="stylesheet" href="/css/mobile.css">
+</head>
+<body data-tab="home">
+  <!-- The phone companion: a read-only second screen for the desktop app.
+       Opened from the desktop's "Open on phone" panel. No instalock, no
+       auto-queue, no lobby intel -- this page looks, it does not touch. -->
+
+  <header class="appbar">
+    <div class="appbar-brand">
+      <img class="appbar-mark" src="/logo.png" alt="" width="28" height="28" decoding="async">
+      <span class="appbar-name">Astral</span>
+    </div>
+    <span class="conn-pill" id="connPill" data-conn="offline">
+      <span class="conn-dot" aria-hidden="true"></span>
+      <span id="connLabel">Connecting…</span>
+    </span>
+  </header>
+
+  <main class="page" id="page">
+    <!-- ================= Home ================= -->
+    <section class="tab" id="tab-home" data-tab="home">
+      <div class="card rank-card" id="rankCard" hidden>
+        <div class="rank-row">
+          <div class="rank-badge">
+            <img id="rankIcon" alt="" decoding="async" hidden>
+            <span id="rankFallback" aria-hidden="true">—</span>
+          </div>
+          <div class="rank-meta">
+            <div class="rank-name" id="rankName">Unranked</div>
+            <div class="rank-rr" id="rankRr">0 RR</div>
+          </div>
+        </div>
+        <div class="rr-bar"><div class="rr-fill" id="rankFill" style="width: 0%"></div></div>
+      </div>
+
+      <div class="card session-card">
+        <div class="card-head">
+          <span class="card-title">This session</span>
+          <span class="card-sub" id="sessionWhen">—</span>
+        </div>
+        <div class="session-nums">
+          <div class="session-num"><span class="num" id="sNet">0</span><span class="lbl">net RR</span></div>
+          <div class="session-num"><span class="num" id="sWins">0</span><span class="lbl">wins</span></div>
+          <div class="session-num"><span class="num" id="sLosses">0</span><span class="lbl">losses</span></div>
+          <div class="session-num"><span class="num" id="sRate">—</span><span class="lbl">winrate</span></div>
+        </div>
+        <div class="form-row" id="formRow"></div>
+        <p class="streak-line" id="streakLine" hidden></p>
+      </div>
+
+      <p class="status-line" id="statusLine">Loading…</p>
+
+      <div class="card">
+        <div class="card-head">
+          <span class="card-title">Recent</span>
+          <span class="card-sub" id="recentWhen"></span>
+        </div>
+        <div class="mini-matches" id="recentList"></div>
+        <p class="empty" id="recentEmpty">Refresh to load your recent matches.</p>
+      </div>
+
+      <div class="chips" id="topChips"></div>
+    </section>
+
+    <!-- ================= Matches ================= -->
+    <section class="tab" id="tab-matches" data-tab="matches" hidden>
+      <div class="list-head">
+        <span class="list-title">Matches</span>
+        <span class="list-sub" id="matchesUpdated">Not loaded yet.</span>
+      </div>
+      <p class="scope">Your recent competitive matches, newest first.</p>
+      <div class="match-list" id="matchList"></div>
+      <p class="empty" id="matchEmpty">Refresh to load your recent matches.</p>
+    </section>
+
+    <!-- ================= Maps ================= -->
+    <section class="tab" id="tab-maps" data-tab="maps" hidden>
+      <div class="list-head">
+        <span class="list-title">Maps</span>
+        <span class="list-sub" id="mapsUpdated">Not loaded yet.</span>
+      </div>
+      <p class="scope">Your recent competitive matches — not global winrates.</p>
+      <div class="map-cards" id="mapCards"></div>
+      <p class="empty" id="mapsEmpty" hidden>Refresh to load your recent matches.</p>
+    </section>
+
+    <!-- ================= Agents ================= -->
+    <section class="tab" id="tab-agents" data-tab="agents" hidden>
+      <div class="list-head">
+        <span class="list-title">Agents</span>
+        <span class="list-sub" id="agentsUpdated">Not loaded yet.</span>
+      </div>
+      <p class="scope">Your recent competitive matches — personal stats, not global Valorant data.</p>
+      <div class="agent-cards" id="agentCards"></div>
+      <div class="card best-card" id="bestCard" hidden>
+        <div class="card-head"><span class="card-title">Best pairing</span></div>
+        <p class="best-line" id="bestLine"></p>
+      </div>
+      <p class="empty" id="agentsEmpty" hidden>Refresh to load your recent matches.</p>
+    </section>
+  </main>
+
+  <nav class="tabs" aria-label="Sections">
+    <button class="tab-btn" type="button" data-tab="home" aria-label="Home" aria-current="page">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5 12 4l8 6.5V20h-5.5v-5h-5v5H4z"></path></svg>
+      <span>Home</span>
+    </button>
+    <button class="tab-btn" type="button" data-tab="matches" aria-label="Matches">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5"></path><path d="M4 19h16"></path><path d="m7.5 15 3.5-4 3 2.5L20 7"></path></svg>
+      <span>Matches</span>
+    </button>
+    <button class="tab-btn" type="button" data-tab="maps" aria-label="Maps">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-5.4-7-11a7 7 0 0 1 14 0c0 5.6-7 11-7 11z"></path><circle cx="12" cy="10" r="2.5"></circle></svg>
+      <span>Maps</span>
+    </button>
+<button class="tab-btn" type="button" data-tab="agents" aria-label="Agents">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="7" r="2.5"></circle><path d="M4.5 17a4.5 4.5 0 0 1 9 0"></path><path d="M15 6.5h5"></path><path d="M15 10h5"></path><path d="M15 13.5h5"></path></svg>
+      <span>Agents</span>
+    </button>
+  </nav>
+  <script type="module" src="/js/mobile/main.js"></script>
+</body>
+</html>

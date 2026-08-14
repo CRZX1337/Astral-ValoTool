@@ -26,6 +26,7 @@ It's one C# app: an embedded ASP.NET Core Web API behind a native WebView2 windo
 | **Rank tracker** | Current rank and RR, session wins/losses and net RR, and per-match RR deltas |
 | **Auto-queue** | Requeues after a match and picks the queue |
 | **Lobby intel** | Your own team's agent picks and ranks during agent select |
+| **Phone companion** | A read-only mirror of rank, session and match history on your phone, on the same Wi-Fi |
 | **Auto-updater** | Watches this repo's releases and installs a new build on request |
 
 ---
@@ -40,6 +41,7 @@ It's one C# app: an embedded ASP.NET Core Web API behind a native WebView2 windo
 - 👥 Lobby intel: while you're in agent select, see who else is on your team, what rank they are, and whether each pick is hovered or locked. It reads the pre-game payload your own client already received — nothing is looked up against another account, and anyone playing incognito stays unnamed.
 - 🔄 Auto-updater: a banner appears when this repo publishes a newer release. Downloading it takes a click, installing it takes another — nothing is fetched or replaced behind your back. "Skip" silences one version without opting out of the next.
 - 📡 Server-Sent Events on `/api/events`, one stream carrying every tool's state.
+- 📱 A phone companion page on your LAN: open the panel in the desktop UI, scan the QR code, and the phone shows rank, session totals, recent matches, maps and agents — read-only, off by default.
 - 🔔 Closing the window sends Astral to the system tray. Running loops keep going.
 - 🖼️ Agent portraits, role icons and rank badges are fetched from `valorant-api.com` at runtime.
 - 📦 The whole web frontend is embedded in the binary.
@@ -113,6 +115,20 @@ It's one C# app: an embedded ASP.NET Core Web API behind a native WebView2 windo
 4. Hit **Start Locking**. Astral watches your local game client and fires when pre-game starts.
 5. Close the window whenever you want. It minimizes to the notification tray and keeps going.
 
+### Phone companion
+
+The desktop UI's **"Open on phone"** card turns on LAN access for this session. It's off every time Astral starts — nothing is ever listening on your network without you asking.
+
+1. Open the "Open on phone" panel from the home screen. Astral picks the address that works from your Wi-Fi and shows a QR code.
+2. Scan it with your phone's camera (or open the printed URL in a browser). The URL carries a one-time token in `?k=`.
+3. The phone shows your rank, today's session, recent matches, map and agent breakdowns. It's read-only — there's no way to change anything from it.
+
+Notes:
+
+- Phone and PC must be on the same network. Guest networks, AP isolation and VPNs can keep them apart.
+- The token is generated fresh each launch, and LAN access turns itself off when Astral exits. If you need it on the desktop UI's own firewall, use **Add firewall rule** in the panel.
+- The companion reads today's session via the same refresh the desktop uses. If the phone was opened before any matches existed, it picks up new ones on its own.
+
 ---
 
 ## 🔌 API
@@ -123,6 +139,10 @@ network can reach it. From there you can drive or watch the lock loop yourself:
 The three state-changing routes reject requests carrying an `Origin` header from another site, so a
 web page you happen to have open can't drive your lock loop. Scripts don't send that header, so
 `curl`, PowerShell and the examples below are unaffected.
+
+Turning on the phone companion widens the same Kestrel to your LAN addresses. Every `/api/*` route
+is then gated by a per-launch token (`?k=…`, `X-Astral-Token`, or the `astral_pair` cookie), and the
+route set is read-only. The lock, auto-queue and updater routes refuse non-loopback calls outright.
 
 | Route | Purpose |
 |---|---|
@@ -144,6 +164,10 @@ web page you happen to have open can't drive your lock loop. Scripts don't send 
 | `GET`/`PATCH /api/autoqueue/options` | Auto-queue settings and the queue list |
 | `GET /api/intel` | Current pre-game lobby snapshot |
 | `POST /api/intel/watch` | Start or stop watching agent select |
+| `POST /api/lan/enable` | `{"enabled": true|false}` — open or close the phone companion for this session |
+| `GET /api/lan/status` | LAN state, addresses, token fingerprint and firewall state (the panel's source) |
+| `POST /api/lan/firewall` | `{"allow": true|false}` — add/remove the private-network inbound rule |
+| `GET /mobile.html` | The companion page itself (only meaningful on the LAN, with `?k=`) |
 
 #### Start, or switch the fallback chain
 ```http
@@ -368,6 +392,22 @@ write it to `%APPDATA%\Astral\settings.json`:
 
 The check is an unauthenticated call to the public releases API, so it's subject
 to GitHub's rate limit for anonymous requests. Nothing is sent with it.
+
+### Phone companion
+
+```json
+{
+  "Lan": {
+    "Enabled": false,
+    "AllowFirewallRule": false
+  }
+}
+```
+
+| Parameter | Type | Description |
+|---|---|---|
+| `Enabled` | boolean | Whether the companion listens on your LAN addresses. Always starts false; the UI panel toggles it per session. |
+| `AllowFirewallRule` | boolean | Whether the panel is allowed to add the inbound `Astral (LAN companion)` rule on private networks. The rule is removed again on exit. |
 
 ---
 

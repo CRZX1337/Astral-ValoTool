@@ -5,6 +5,8 @@
 
 import { refreshTrackerState, resetSession } from "../store.js";
 import { countUp, stagger, swapText } from "./motion.js";
+import { mountChart } from "./chart.js";
+import { buildSeries, shortDate } from "../stats/session-stats.js";
 
 /** Riot's RR scale within a tier. Radiant runs past it, so the bar clamps. */
 const RR_PER_TIER = 100;
@@ -27,6 +29,9 @@ export function mountTracker() {
   const played = document.getElementById("sessionPlayed");
   const list = document.getElementById("matchList");
   const empty = document.getElementById("matchEmpty");
+  const journeySummary = document.getElementById("journeySummary");
+  const journeyChart = document.getElementById("journeyChart");
+  const chart = mountChart(journeyChart);
 
   refreshButton.addEventListener("click", () => void refreshTrackerState());
   resetButton.addEventListener("click", () => void resetSession());
@@ -113,7 +118,64 @@ export function mountTracker() {
         ? "No competitive matches found."
         : "Refresh to load your recent matches.";
     }
+
+    paintJourney(tracker, { summary: journeySummary, container: journeyChart, chart });
   };
+}
+
+/**
+ * Rank journey: the same matches, but as a progression. The API delivers them
+ * newest-first, so the story is read by walking the list backwards -- the
+ * leftmost point is the oldest match and the rightmost is the standing now.
+ */
+function paintJourney(tracker, { summary, container, chart }) {
+  const matches = tracker?.matches ?? [];
+  const ordered = [...matches].reverse();
+  const plotted = ordered.filter((match) => Number.isFinite(match?.rrAfter));
+
+  // The journey's net is simply the RR its matches actually moved: every
+  // plotted match carried an RrChange, and summing it is the same sum the
+  // session grid shows, just over the plotted stretch rather than the anchor.
+  const net = plotted.reduce(
+    (sum, match) => sum + (Number.isFinite(match.rrChange) ? match.rrChange : 0),
+    0);
+
+  const points = buildSeries(ordered);
+
+  swapText(summary, summaryFor(tracker, points, net));
+
+  // The chart has nothing to say until there is a match to plot. The summary
+  // line already explains why it is missing.
+  container.hidden = points.length === 0;
+
+  if (points.length === 0) {
+    return;
+  }
+
+  const ys = points.map((point) => point.y);
+
+  chart(points, {
+    // The y axis is a tier's RR scale, so the domain starts at 0 and only
+    // grows upward -- Radiant's overflow beyond 100 is drawn, not clamped
+    // into lying.
+    yMin: Math.min(0, ...ys),
+    yMax: Math.max(RR_PER_TIER, ...ys),
+    grid: [0, 50, RR_PER_TIER],
+    xLabels: [shortDate(ordered[0]?.startedAt), shortDate(ordered[ordered.length - 1]?.startedAt)]
+  });
+}
+
+function summaryFor(tracker, points, net) {
+  if (!tracker?.updatedAt) {
+    return "Refresh to load your recent matches.";
+  }
+
+  if (points.length === 0) {
+    return "Play a competitive match to start your journey.";
+  }
+
+  const last = points[points.length - 1];
+  return `${points.length} match${points.length === 1 ? "" : "es"} · ${net > 0 ? "+" : ""}${net} RR · now ${last.tierName}, ${last.rrAfter} RR`;
 }
 
 function paintMatches(list, matches) {

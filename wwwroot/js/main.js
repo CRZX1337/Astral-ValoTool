@@ -14,13 +14,17 @@ import {
   subscribe
 } from "./store.js";
 import { mountAgentGrid } from "./ui/agent-grid.js";
+import { mountAgents } from "./ui/agents.js";
 import { mountAutoQueue } from "./ui/autoqueue.js";
 import { mountBoot } from "./ui/boot.js";
 import { mountControlPanel } from "./ui/control-panel.js";
 import { mountControls } from "./ui/controls.js";
 import { mountHeader } from "./ui/header.js";
 import { mountIntel } from "./ui/intel.js";
+import { mountLan } from "./ui/lan.js";
+import { mountMaps } from "./ui/maps.js";
 import { mountPerf } from "./ui/perf.js";
+import { mountSession } from "./ui/session.js";
 import { mountSettings } from "./ui/settings.js";
 import { mountShell } from "./ui/shell.js";
 import { mountTilt } from "./ui/tilt.js";
@@ -47,8 +51,12 @@ const views = [
   mountAgentGrid(),
   mountControlPanel(),
   mountTracker(),
+  mountMaps(),
+  mountAgents(),
+  mountSession(),
   mountAutoQueue(),
   mountIntel(),
+  mountLan(),
   mountSettings(),
   mountUpdate(),
   mountTooltips(),

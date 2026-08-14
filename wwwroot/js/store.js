@@ -33,7 +33,7 @@ import {
 import { sortRoles } from "./roles.js";
 
 /** Views the shell can show. `home` is the launcher; the rest are tools. */
-export const VIEWS = ["home", "instalock", "tracker", "autoqueue", "intel"];
+export const VIEWS = ["home", "instalock", "tracker", "maps", "agents", "session", "autoqueue", "intel"];
 
 /**
  * How long to let a view transition settle before a tool fetches anything.
@@ -77,6 +77,14 @@ const state = {
   connected: true,
   pending: null,
   actionError: null,
+
+  // How state is arriving right now: "stream" (SSE), "retrying" (the stream
+  // is down but we are still hoping), "polling" (adaptive fallback loop), or
+  // "offline" (nothing has worked in a while). Owned by poller.js; the mobile
+  // companion's status pill is the only reader. Desktop views deliberately
+  // ignore it -- their notion of connectivity is `connected` and it is
+  // unchanged.
+  transport: "offline",
 
   // Settings modal. `options` is the last server truth, `optionsDraft` the
   // editable copy the panel binds to; the save button compares the two.
@@ -254,7 +262,11 @@ export function setView(view) {
       return;
     }
 
-    if (view === "tracker" && !state.tracker?.updatedAt && !state.trackerPending) {
+    // Map intelligence, agent intelligence and session analytics draw on the
+    // tracker's matches, so they share the tracker's lazy refresh: first open
+    // of any of them loads the history once.
+    if ((view === "tracker" || view === "maps" || view === "agents" || view === "session") &&
+        !state.tracker?.updatedAt && !state.trackerPending) {
       void refreshTrackerState();
     }
 
@@ -281,8 +293,14 @@ export function goHome() {
 /**
  * A frame off /api/events. Every tool publishes its whole state, so this is a
  * straight assignment rather than a merge.
+ *
+ * This is the stream's own path -- the polling loop feeds applyLockState
+ * instead -- so a frame arriving here is proof the stream is alive, which is
+ * what the mobile companion's transport pill reads.
  */
 export function applyModuleState(module, moduleState) {
+  state.transport = "stream";
+
   switch (module) {
     case "instalock":
       applyLockState(moduleState);
@@ -710,6 +728,15 @@ export function setConnected(connected) {
   }
 
   state.connected = connected;
+  emit();
+}
+
+export function setTransport(transport) {
+  if (state.transport === transport) {
+    return;
+  }
+
+  state.transport = transport;
   emit();
 }
 

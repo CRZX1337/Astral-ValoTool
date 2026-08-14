@@ -10,10 +10,13 @@ namespace Astral.Services;
 public sealed class InstalockerService : IModuleStateSource
 {
     private static readonly IReadOnlyDictionary<string, ValorantTables.Agent> AgentLookup = BuildAgentLookup();
+    // AgentIds must be initialized before Agents: BuildAgents() reads it to
+    // carry each agent's character uuid, and static fields run in declaration
+    // order.
+    private static readonly IReadOnlyDictionary<ValorantTables.Agent, string> AgentIds = BuildAgentIds();
     private static readonly IReadOnlyList<AgentOption> Agents = BuildAgents();
     private static readonly IReadOnlyList<string> MapNames = BuildMapNames();
     private static readonly IReadOnlyDictionary<string, string> MapNameLookup = BuildMapNameLookup();
-    private static readonly IReadOnlyDictionary<ValorantTables.Agent, string> AgentIds = BuildAgentIds();
 
     /// <summary>Shown when pre-game reports a map that cannot be identified at all.</summary>
     private const string UnknownMapName = "the current map";
@@ -631,9 +634,14 @@ public sealed class InstalockerService : IModuleStateSource
 
     private static IReadOnlyList<AgentOption> BuildAgents()
     {
-        // All agents in the RadiantConnect enum are selectable (including Veto & Miks)
+        // All agents in the RadiantConnect enum are selectable (including Veto & Miks).
+        // Uuid rides along from the same table the lock loop uses, lowercased so
+        // match-history lookups never fight over casing.
         return Enum.GetValues<ValorantTables.Agent>()
-            .Select(agent => new AgentOption(ToDisplayName(agent), Normalize(ToDisplayName(agent))))
+            .Select(agent => new AgentOption(
+                ToDisplayName(agent),
+                Normalize(ToDisplayName(agent)),
+                AgentIds.TryGetValue(agent, out string? id) ? id.ToLowerInvariant() : null))
             .OrderBy(agent => agent.Name, StringComparer.OrdinalIgnoreCase)
             .ToArray();
     }

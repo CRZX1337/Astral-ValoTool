@@ -13,6 +13,9 @@ const TITLES = {
   home: "Astral",
   instalock: "Instalock",
   tracker: "Rank tracker",
+  maps: "Map intelligence",
+  agents: "Agent intelligence",
+  session: "Session analytics",
   autoqueue: "Auto-queue",
   intel: "Lobby intel"
 };
@@ -52,13 +55,15 @@ export function mountShell() {
   backButton.addEventListener("click", goHome);
 
   // Escape backs out of a tool. The agent grid's own Escape (clearing the
-  // search box) runs first and stops there, so this never fights it.
+  // search box) runs first and stops there, so this never fights it. The LAN
+  // panel handles its own Escape; this only has to not go home while it is up.
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape" || event.defaultPrevented) {
       return;
     }
 
-    const modalOpen = document.getElementById("settingsModal")?.hidden === false;
+    const modalOpen = document.getElementById("settingsModal")?.hidden === false ||
+      document.getElementById("lanModal")?.hidden === false;
 
     if (!modalOpen) {
       goHome();
@@ -68,6 +73,9 @@ export function mountShell() {
   const statuses = {
     instalock: document.getElementById("statusInstalock"),
     tracker: document.getElementById("statusTracker"),
+    maps: document.getElementById("statusMaps"),
+    agents: document.getElementById("statusAgents"),
+    session: document.getElementById("statusSession"),
     autoqueue: document.getElementById("statusAutoqueue"),
     intel: document.getElementById("statusIntel")
   };
@@ -192,6 +200,9 @@ export function mountShell() {
 
     paintStatus(statuses.instalock, instalockStatus(state));
     paintStatus(statuses.tracker, trackerStatus(state));
+    paintStatus(statuses.maps, mapsStatus(state));
+    paintStatus(statuses.agents, agentsStatus(state));
+    paintStatus(statuses.session, sessionStatus(state));
     paintStatus(statuses.autoqueue, autoqueueStatus(state));
     paintStatus(statuses.intel, intelStatus(state));
   };
@@ -232,6 +243,61 @@ function trackerStatus(state) {
   const sign = net > 0 ? "+" : "";
 
   return { text: `${rank} · ${sign}${net} RR today`, live: net !== 0 };
+}
+
+function mapsStatus(state) {
+  const tracker = state.tracker;
+
+  if (!tracker?.updatedAt) {
+    return { text: "Not loaded", live: false };
+  }
+
+  const maps = new Set((tracker.matches ?? []).map((match) => match.mapName ?? "")).size;
+  const net = tracker.session?.netRr ?? 0;
+  const sign = net > 0 ? "+" : "";
+
+  return { text: `${maps} map${maps === 1 ? "" : "s"} · ${sign}${net} RR`, live: net !== 0 };
+}
+
+function agentsStatus(state) {
+  const tracker = state.tracker;
+
+  if (!tracker?.updatedAt) {
+    return { text: "Not loaded", live: false };
+  }
+
+  const matches = tracker.matches ?? [];
+  const agents = new Set(matches.map((match) => match.agentId ?? "").filter(Boolean)).size;
+  const net = tracker.session?.netRr ?? 0;
+  const sign = net > 0 ? "+" : "";
+
+  // Enrichment lands in the background, so an empty agent set on a loaded
+  // tracker is "on its way", not "you never play".
+  if (matches.length > 0 && agents === 0) {
+    return { text: "Resolving agents · —", live: false };
+  }
+
+  return { text: `${agents} agent${agents === 1 ? "" : "s"} · ${sign}${net} RR`, live: net !== 0 };
+}
+
+function sessionStatus(state) {
+  const tracker = state.tracker;
+
+  if (!tracker?.updatedAt) {
+    return { text: "Not loaded", live: false };
+  }
+
+  const session = tracker.session ?? null;
+  const net = session?.netRr ?? 0;
+  const played = (session?.wins ?? 0) + (session?.losses ?? 0) + (session?.draws ?? 0);
+
+  if (played === 0) {
+    return { text: "No session yet", live: false };
+  }
+
+  const sign = net > 0 ? "+" : "";
+
+  return { text: `${played} match${played === 1 ? "" : "es"} · ${sign}${net} RR`, live: net !== 0 };
 }
 
 function autoqueueStatus(state) {

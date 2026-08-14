@@ -4,8 +4,8 @@
  * or the stream keeps failing.
  */
 
-import { fetchState } from "./api.js";
-import { applyLockState, applyModuleState, phase, setConnected } from "./store.js";
+import { fetchState, withToken } from "./api.js";
+import { applyLockState, applyModuleState, phase, setConnected, setTransport } from "./store.js";
 
 const INTERVALS = {
   booting: 600,
@@ -54,12 +54,15 @@ async function hydrate() {
 function openStream() {
   // The multiplexed stream: every tool, each frame tagged with its module id.
   // /api/state/stream still exists and still carries a bare LockState, but it
-  // is there for external scripts rather than for us.
-  stream = new EventSource("/api/events");
+  // is there for external scripts rather than for us. The mobile companion's
+  // pairing token rides along in the query string -- an EventSource has no
+  // headers of its own.
+  stream = new EventSource(withToken("/api/events"));
 
   stream.addEventListener("open", () => {
     failures = 0;
     setConnected(true);
+    setTransport("stream");
   });
 
   stream.addEventListener("message", (event) => {
@@ -72,6 +75,7 @@ function openStream() {
     }
 
     failures = 0;
+    setTransport("stream");
 
     if (next && typeof next.module === "string") {
       applyModuleState(next.module, next.state);
@@ -83,6 +87,9 @@ function openStream() {
 
     if (failures >= FAILURES_BEFORE_OFFLINE) {
       setConnected(false);
+      setTransport("offline");
+    } else {
+      setTransport("retrying");
     }
 
     if (failures >= FAILURES_BEFORE_POLLING) {
@@ -100,6 +107,7 @@ function startPolling() {
 
   polling = true;
   failures = 0;
+  setTransport("polling");
 
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) {
@@ -119,6 +127,7 @@ async function tick() {
   }
 
   inFlight = true;
+  setTransport("polling");
 
   try {
     applyLockState(await fetchState());
@@ -129,6 +138,7 @@ async function tick() {
 
     if (failures >= FAILURES_BEFORE_OFFLINE) {
       setConnected(false);
+      setTransport("offline");
     }
   } finally {
     inFlight = false;

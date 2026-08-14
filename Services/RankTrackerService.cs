@@ -28,6 +28,33 @@ public sealed class RankTrackerService : IModuleStateSource
     /// </summary>
     private Task? _inFlight;
 
+    /// <summary>
+    /// The agent enrichment currently in flight, if any. Same sharing rule as
+    /// <see cref="_inFlight"/>: one round of match-details calls at a time.
+    /// </summary>
+    private Task? _enrichInFlight;
+
+    /// <summary>
+    /// Match ids whose match-details request is currently running. Guards the
+    /// "at most one request per match" rule even when the refresh replaces the
+    /// match list underneath the enrichment.
+    /// </summary>
+    private readonly HashSet<string> _enriching = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Resolved agent ids, keyed by match id. Kept out of the refresh path so a
+    /// refresh rebuilds <see cref="TrackedMatch"/> rows without losing what an
+    /// earlier enrichment found -- competitive updates do not carry the agent.
+    /// </summary>
+    private readonly Dictionary<string, string> _agentByMatchId = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Pacing between match-details calls. A refresh can surface a whole
+    /// evening of new matches at once; stepping through them keeps an
+    /// uncontrolled burst from reaching Riot's match-details endpoint.
+    /// </summary>
+    private static readonly TimeSpan EnrichmentDelay = TimeSpan.FromMilliseconds(250);
+
     private RankState _state = RankState.Empty();
     private DateTimeOffset _sessionStart;
 
@@ -178,17 +205,30 @@ public sealed class RankTrackerService : IModuleStateSource
                 mmr?.LatestCompetitiveUpdate?.RankedRatingAfterUpdate,
                 tiers);
 
-            List<TrackedMatch> matches = (updates?.Matches ?? [])
-                .Select(match => ToTrackedMatch(match, tiers))
-                .Where(match => match is not null)
-                .Select(match => match!)
-                .OrderByDescending(match => match.StartedAt ?? DateTimeOffset.MinValue)
-                .ToList();
-
+            List<TrackedMatch> matches;
             RankState published;
 
             lock (_sync)
             {
+                matches = (updates?.Matches ?? [])
+                    .Select(match => ToTrackedMatch(match, tiers))
+                    .Where(match => match is not null)
+                    .Select(match => match!)
+                    .OrderByDescending(match => match.StartedAt ?? DateTimeOffset.MinValue)
+                    .ToList();
+
+                // Match ids that left the competitive-updates window no longer
+                // need their agent kept alive; forgetting them bounds the map.
+                if (_agentByMatchId.Count > 0)
+                {
+                    HashSet<string> current = new(matches.Select(match => match.MatchId), StringComparer.Ordinal);
+
+                    foreach (string stale in _agentByMatchId.Keys.Where(key => !current.Contains(key)).ToList())
+                    {
+                        _agentByMatchId.Remove(stale);
+                    }
+                }
+
                 published = _state = new RankState(
                     false,
                     null,
@@ -199,6 +239,7 @@ public sealed class RankTrackerService : IModuleStateSource
             }
 
             Publish(published);
+            StartAgentEnrichment(puuid);
         }
         catch (OperationCanceledException)
         {
@@ -220,6 +261,134 @@ public sealed class RankTrackerService : IModuleStateSource
                 _inFlight = null;
             }
         }
+    }
+
+    /// <summary>
+    /// Kicks off the background agent enrichment after a refresh. The refresh
+    /// itself never waits on it: competitive updates are the tracker's truth,
+    /// and a match whose agent cannot be resolved stays valid without one.
+    ///
+    /// Like the refresh, concurrent triggers share one round -- enrichment is
+    /// paced (one match-details call at a time) precisely so that Riot is not
+    /// hit with a burst whenever several refreshes land close together.
+    /// </summary>
+    private void StartAgentEnrichment(string puuid)
+    {
+        lock (_sync)
+        {
+            if (_enrichInFlight is { IsCompleted: false })
+            {
+                return;
+            }
+
+            _enrichInFlight = EnrichAgentsAsync(puuid);
+        }
+    }
+
+    /// <summary>
+    /// Resolves the played agent for every match that still lacks one, then
+    /// publishes the updated state. Failures are quietly left for the next
+    /// refresh to retry -- enrichment is supplemental, so it never surfaces an
+    /// error to the view.
+    /// </summary>
+    private async Task EnrichAgentsAsync(string puuid)
+    {
+        try
+        {
+            using ValorantLease lease = await _connection.AcquireAsync().ConfigureAwait(false);
+
+            List<TrackedMatch> pending;
+
+            lock (_sync)
+            {
+                pending = _state.Matches
+                    .Where(match => match.AgentId is null && _enriching.Add(match.MatchId))
+                    .ToList();
+            }
+
+            try
+            {
+                foreach (TrackedMatch match in pending)
+                {
+                    string? agentId = await FetchAgentIdAsync(lease, match.MatchId, puuid).ConfigureAwait(false);
+
+                    if (!string.IsNullOrWhiteSpace(agentId))
+                    {
+                        ApplyAgent(match.MatchId, agentId);
+                    }
+
+                    await Task.Delay(EnrichmentDelay).ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                lock (_sync)
+                {
+                    foreach (TrackedMatch match in pending)
+                    {
+                        _enriching.Remove(match.MatchId);
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Enrichment is a nicety: the tracker must stay fully functional
+            // without it, so nothing here may surface to the view.
+        }
+        finally
+        {
+            lock (_sync)
+            {
+                _enrichInFlight = null;
+            }
+        }
+    }
+
+    /// <summary>
+    /// One match-details round trip: the player's own entry in the match, then
+    /// the agent they actually played. <c>null</c> when the match does not
+    /// (yet) exist or the account cannot be found in it.
+    /// </summary>
+    private async Task<string?> FetchAgentIdAsync(ValorantLease lease, string matchId, string puuid)
+    {
+        try
+        {
+            MatchInfo? info = await lease.Initiator.Endpoints.PvpEndpoints
+                .FetchMatchInfoAsync(matchId).ConfigureAwait(false);
+
+            return info?.Players
+                .FirstOrDefault(player => string.Equals(player.Subject, puuid, StringComparison.OrdinalIgnoreCase))
+                ?.CharacterId;
+        }
+        catch (Exception)
+        {
+            // Whatever went wrong -- the match is too fresh, the endpoint
+            // throttled, the client went away -- the next refresh retries.
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Records a resolved agent and republishes the state so the view picks it
+    /// up without waiting for the next refresh.
+    /// </summary>
+    private void ApplyAgent(string matchId, string agentId)
+    {
+        RankState published;
+
+        lock (_sync)
+        {
+            _agentByMatchId[matchId] = agentId;
+
+            IReadOnlyList<TrackedMatch> updated = _state.Matches
+                .Select(match => match.MatchId == matchId ? match with { AgentId = agentId } : match)
+                .ToList();
+
+            published = _state = _state with { Matches = updated };
+        }
+
+        Publish(published);
     }
 
     /// <summary>
@@ -259,7 +428,7 @@ public sealed class RankTrackerService : IModuleStateSource
             (int)(rankedRating ?? 0));
     }
 
-    private static TrackedMatch? ToTrackedMatch(Match match, IReadOnlyDictionary<int, CompetitiveTierAsset> tiers)
+    private TrackedMatch? ToTrackedMatch(Match match, IReadOnlyDictionary<int, CompetitiveTierAsset> tiers)
     {
         if (string.IsNullOrWhiteSpace(match.MatchId))
         {
@@ -270,6 +439,13 @@ public sealed class RankTrackerService : IModuleStateSource
         int tierAfter = (int)(match.TierAfterUpdate ?? 0);
         tiers.TryGetValue(tierAfter, out CompetitiveTierAsset? asset);
 
+        string? agentId;
+
+        lock (_sync)
+        {
+            _agentByMatchId.TryGetValue(match.MatchId!, out agentId);
+        }
+
         return new TrackedMatch(
             match.MatchId!,
             InstalockerService.ResolveMapName(match.MapId),
@@ -278,7 +454,9 @@ public sealed class RankTrackerService : IModuleStateSource
             (int)(match.RankedRatingAfterUpdate ?? 0),
             tierAfter,
             asset?.Name ?? (tierAfter == UnrankedTier ? "Unranked" : $"Tier {tierAfter}"),
-            change > 0 ? "win" : change < 0 ? "loss" : "draw");
+            change > 0 ? "win" : change < 0 ? "loss" : "draw",
+            asset?.Color,
+            agentId);
     }
 
     private static SessionSummary Summarize(

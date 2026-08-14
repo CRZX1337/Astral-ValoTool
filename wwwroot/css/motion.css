@@ -250,9 +250,15 @@ body[data-booted] .tool-card {
 /* Match rows are different: they arrive when the network answers, which is
    usually *after* the view is already on screen. Anything with travel in it
    reads as a second entrance -- as though the tool had reloaded. A short fade
-   in place says "the data landed" without performing. */
+   in place says "the data landed" without performing. The map cards and
+   comparison rows land the same way. */
 .match-row,
-.lobby-row {
+.lobby-row,
+.map-card,
+.compare-row,
+.agent-stats-card,
+.agent-map-cell,
+.session-map-row {
   animation: settle-in 220ms linear both;
   animation-delay: calc(var(--i, 0) * 12ms);
 }
@@ -260,6 +266,21 @@ body[data-booted] .tool-card {
 @keyframes settle-in {
   from { opacity: 0; }
   to   { opacity: 1; }
+}
+
+/* Rank journey chart: the same "data landed" language as the rows above.
+   The line draws itself (classed by ui/chart.js; reduced motion and resize
+   repaints skip the classes entirely), the tier bands settle in, and the dots
+   pop in left to right, capped by the same stagger convention everywhere
+   else. Band dimness survives because it lives in a fill-opacity attribute
+   the animation does not touch. */
+.journey-band.is-new {
+  animation: settle-in 260ms linear both;
+}
+
+.journey-point.is-new {
+  animation: pop-in 460ms var(--spring) both;
+  animation-delay: calc(var(--i, 0) * 40ms);
 }
 
 /* 5. Micro-motion ======================================================== */
@@ -326,9 +347,16 @@ body[data-booted] .tool-card {
   body[data-booted] .tool-card,
   .view.is-entering > *,
   .agent-card.is-new,
+  .agent-stats-card,
+  .agent-map-cell,
   .match-row,
   .lobby-row,
+  .map-card,
+  .compare-row,
+  .session-map-row,
   .queue-chip.is-new,
+  .journey-band.is-new,
+  .journey-point.is-new,
   .preset-card,
   .back-btn:not([hidden]),
   .rank-badge img:not([hidden]),

@@ -194,6 +194,68 @@
             </span>
           </button>
 
+          <button class="tool-card glass glass-rim lit tilt" type="button" data-goto="maps" style="--i: 4">
+            <span class="tool-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 21s-7-5.4-7-11a7 7 0 0 1 14 0c0 5.6-7 11-7 11z"></path>
+                <circle cx="12" cy="10" r="2.5"></circle>
+              </svg>
+            </span>
+            <span class="tool-name">Map intelligence</span>
+            <span class="tool-desc">Which maps you win, and which ones cost you RR.</span>
+            <span class="tool-status" id="statusMaps" data-live="off">
+              <span class="tool-dot" aria-hidden="true"></span><span>Not loaded</span>
+            </span>
+          </button>
+
+          <button class="tool-card glass glass-rim lit tilt" type="button" data-goto="agents" style="--i: 5">
+            <span class="tool-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="9" cy="7" r="2.5"></circle>
+                <path d="M4.5 17a4.5 4.5 0 0 1 9 0"></path>
+                <path d="M15 6.5h5"></path>
+                <path d="M15 10h5"></path>
+                <path d="M15 13.5h5"></path>
+              </svg>
+            </span>
+            <span class="tool-name">Agent intelligence</span>
+            <span class="tool-desc">Which agents you win with, and where they play best.</span>
+            <span class="tool-status" id="statusAgents" data-live="off">
+              <span class="tool-dot" aria-hidden="true"></span><span>Not loaded</span>
+            </span>
+          </button>
+
+          <button class="tool-card glass glass-rim lit tilt" type="button" data-goto="session" style="--i: 6">
+            <span class="tool-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="9"></circle>
+                <path d="M12 7v5l3.5 2"></path>
+              </svg>
+            </span>
+            <span class="tool-name">Session analytics</span>
+            <span class="tool-desc">How this session actually went — streaks, swings, and the maps behind them.</span>
+            <span class="tool-status" id="statusSession" data-live="off">
+              <span class="tool-dot" aria-hidden="true"></span><span>Not loaded</span>
+            </span>
+          </button>
+
+          <!-- Not a tool: it opens a modal, so it is a plain button rather than
+               a data-goto card. The phone is a second screen, not a fifth
+               install of the toolkit. -->
+          <button class="tool-card glass glass-rim lit tilt" id="lanCard" type="button" style="--i: 7">
+            <span class="tool-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="7" y="2.5" width="10" height="19" rx="2.5"></rect>
+                <path d="M11 18.5h2"></path>
+              </svg>
+            </span>
+            <span class="tool-name">Open on phone</span>
+            <span class="tool-desc">Put this window on your phone or tablet — scan, tap, done.</span>
+            <span class="tool-status" id="statusLan" data-live="off">
+              <span class="tool-dot" aria-hidden="true"></span><span>Closed</span>
+            </span>
+          </button>
+
         </div>
       </section>
 
@@ -316,6 +378,19 @@
         </section>
 
         <section class="tool-body glass">
+          <div class="journey-head">
+            <div>
+              <div class="tool-head-title">Rank journey</div>
+              <!-- The chart's text equivalent. It is real content, not a
+                   visually-hidden label: it doubles as the section's subtitle,
+                   and it is what a screen reader hears instead of the SVG. -->
+              <div class="tool-head-sub" id="journeySummary">Refresh to load your recent matches.</div>
+            </div>
+          </div>
+          <div class="journey" id="journeyChart" hidden></div>
+        </section>
+
+        <section class="tool-body glass">
           <div class="tool-head-title">Recent competitive</div>
           <div class="match-list" id="matchList"></div>
           <p class="tool-empty" id="matchEmpty">Refresh to load your recent matches.</p>
@@ -411,6 +486,128 @@
         </section>
       </section>
 
+      <!-- ================= Map intelligence ================= -->
+      <section class="view view-tool" id="view-maps" data-view="maps" hidden>
+        <header class="tool-head glass">
+          <div>
+            <div class="tool-head-title">Map intelligence</div>
+            <div class="tool-head-sub" id="mapsUpdated">Not loaded yet.</div>
+          </div>
+          <div class="tool-head-actions">
+            <button class="btn btn-ghost btn-compact" id="mapsRefresh" type="button">
+              <span class="btn-spinner" aria-hidden="true"></span>
+              <span id="mapsRefreshLabel">Refresh</span>
+            </button>
+          </div>
+        </header>
+
+        <p class="tool-alert" id="mapsAlert" role="alert" hidden></p>
+
+        <section class="tool-body glass">
+          <div class="tool-head-title">Map overview</div>
+          <!-- The dataset is the tracker's own recent competitive history; the
+               numbers are personal, and the note says so rather than letting
+               them read as global winrates. -->
+          <p class="tool-note" id="mapsScope">Your own recent competitive matches — not global winrates.</p>
+          <div class="map-grid" id="mapGrid"></div>
+          <p class="tool-empty" id="mapsEmpty" hidden>Refresh to load your recent matches.</p>
+        </section>
+
+        <section class="tool-body glass">
+          <div class="tool-head-title">Comparison</div>
+          <div class="compare" id="mapCompare" hidden></div>
+          <p class="tool-empty" id="compareEmpty" hidden></p>
+        </section>
+      </section>
+
+      <!-- ================= Agent intelligence ================= -->
+      <section class="view view-tool" id="view-agents" data-view="agents" hidden>
+        <header class="tool-head glass">
+          <div>
+            <div class="tool-head-title">Agent intelligence</div>
+            <div class="tool-head-sub" id="agentsUpdated">Not loaded yet.</div>
+          </div>
+          <div class="tool-head-actions">
+            <button class="btn btn-ghost btn-compact" id="agentsRefresh" type="button">
+              <span class="btn-spinner" aria-hidden="true"></span>
+              <span id="agentsRefreshLabel">Refresh</span>
+            </button>
+          </div>
+        </header>
+
+        <p class="tool-alert" id="agentsAlert" role="alert" hidden></p>
+
+        <section class="tool-body glass">
+          <div class="tool-head-title">Agent overview</div>
+          <!-- The dataset is the tracker's own recent competitive history,
+               enriched with the agent actually played in each match; the
+               numbers are personal, and the note says so rather than letting
+               them read as global winrates. -->
+          <p class="tool-note" id="agentsScope">Your recent competitive matches — personal stats, not global Valorant data.</p>
+          <div class="agent-stats-grid" id="agentsOverview"></div>
+          <p class="tool-empty" id="agentsEmpty" hidden>Refresh to load your recent matches.</p>
+        </section>
+
+        <section class="tool-body glass">
+          <div class="tool-head-title">Agent &times; Map</div>
+          <p class="tool-note">A cell needs two matches before its winrate and RR read as meaningful; fewer still show the match count.</p>
+          <div class="agent-map-scroll" id="agentMap" hidden></div>
+          <p class="tool-empty" id="agentMapEmpty" hidden></p>
+        </section>
+      </section>
+
+      <!-- ================= Session analytics ================= -->
+      <section class="view view-tool" id="view-session" data-view="session" hidden>
+        <header class="tool-head glass">
+          <div>
+            <div class="tool-head-title">Session analytics</div>
+            <div class="tool-head-sub" id="sessionUpdated">Not loaded yet.</div>
+          </div>
+        </header>
+
+        <p class="tool-alert" id="sessionAlert" role="alert" hidden></p>
+
+        <section class="tool-body glass">
+          <div class="tool-head-title">Session</div>
+          <!-- The dataset is the tracker's own competitive history since the
+               session anchor; the numbers are personal, and the note says so
+               rather than letting them read as global statistics. -->
+          <p class="tool-note" id="sessionScope">Your own recent competitive matches since the session started — not global winrates.</p>
+          <div class="session-hero" id="sessionHero" hidden>
+            <div class="session-hero-main">
+              <span class="session-hero-label">Net RR</span>
+              <span class="session-hero-rr" id="sessionNet">0</span>
+              <span class="session-hero-meta" id="sessionPlayed">0 matches</span>
+            </div>
+            <dl class="session-grid session-hero-grid" id="sessionHeroGrid">
+              <div class="session-stat"><dt>W / L / D</dt><dd id="sessionWld">0 / 0 / 0</dd></div>
+              <div class="session-stat"><dt>Winrate</dt><dd id="sessionWinrate">—</dd></div>
+              <div class="session-stat"><dt>Avg RR</dt><dd id="sessionAvg">—</dd></div>
+              <div class="session-stat"><dt>Best / Worst</dt><dd id="sessionBestWorst">—</dd></div>
+              <div class="session-stat"><dt>Start → Now</dt><dd id="sessionRankSpan">—</dd></div>
+              <div class="session-stat"><dt>Span</dt><dd id="sessionSpan">—</dd></div>
+            </dl>
+          </div>
+          <p class="tool-empty" id="sessionEmpty">Refresh to load your recent matches.</p>
+        </section>
+
+        <section class="tool-body glass" id="sessionChartSection">
+          <div class="tool-head-title">Session progression</div>
+          <div class="journey" id="sessionChart" hidden></div>
+        </section>
+
+        <section class="tool-body glass" id="sessionInsightsSection">
+          <div class="tool-head-title">Insights</div>
+          <div class="session-insights" id="sessionInsights" hidden></div>
+        </section>
+
+        <section class="tool-body glass" id="sessionMapsSection">
+          <div class="tool-head-title">Maps in this session</div>
+          <div class="session-maps" id="sessionMaps" hidden></div>
+          <button class="btn btn-ghost btn-compact session-maps-link" type="button" data-goto="maps">Open map intelligence</button>
+        </section>
+      </section>
+
     </div>
   </div>
 
@@ -495,6 +692,55 @@
     </div>
   </div>
 
+  <div class="modal" id="lanModal" hidden>
+    <div class="modal-backdrop" data-close-lan></div>
+
+    <div class="modal-panel glass" role="dialog" aria-modal="true" aria-labelledby="lanTitle">
+      <header class="modal-head">
+        <h2 class="modal-title" id="lanTitle">Open on phone</h2>
+        <button class="icon-btn" id="lanClose" type="button" aria-label="Close phone panel" data-close-lan>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M18.3 5.71 12 12.01l-6.3-6.3-1.41 1.41 6.3 6.3-6.3 6.3 1.41 1.41 6.3-6.3 6.3 6.3 1.41-1.41-6.3-6.3 6.3-6.3z"></path>
+          </svg>
+        </button>
+      </header>
+
+      <div class="modal-body" id="lanBody">
+        <p class="lan-loading" id="lanLoading">Checking this computer's network…</p>
+
+        <section class="lan-enable" id="lanEnableGroup" hidden>
+          <label class="toggle-row">
+            <input type="checkbox" id="lanEnabled">
+            <span>
+              <span class="toggle-title">Allow phones on this network</span>
+              <span class="toggle-hint">Off by default. While it is off, phones and other computers on the network get a 403.</span>
+            </span>
+          </label>
+        </section>
+
+        <p class="lan-note lan-state" id="lanState" role="status" hidden></p>
+
+        <section class="lan-pair" id="lanPairGroup" hidden>
+          <div class="lan-qr" id="lanQr"></div>
+          <div class="lan-url-box">
+            <p class="eyebrow">Phone URL</p>
+            <input class="lan-url" id="lanUrl" readonly spellcheck="false" aria-label="Phone URL">
+          </div>
+          <p class="lan-hint">Same network, same room. The link is tied to this app session — close Astral and the next launch needs a fresh scan.</p>
+        </section>
+
+        <section class="lan-firewall" id="lanFirewallGroup" hidden>
+          <p class="lan-note" id="lanFirewallNote"></p>
+          <button class="btn btn-quiet btn-compact" id="lanFirewall" type="button">Allow through firewall</button>
+        </section>
+
+        <section class="lan-empty" id="lanEmpty" hidden>
+          <p class="tool-note">No reachable network address was found. Connect this computer to the same network as your phone and reopen this panel.</p>
+        </section>
+      </div>
+    </div>
+  </div>
+
   <template id="overrideRowTemplate">
     <div class="rule-row">
       <select class="rule-map" aria-label="Map"></select>
@@ -522,6 +768,10 @@
     </button>
   </template>
 
+  <!-- The QR renderer, vendored so the panel works offline. qrcode.js is a
+       CommonJS UMD with no browser global, so qrcode-loader.js evaluates it
+       and publishes window.qrcode -- plain scripts, no modules needed. -->
+  <script src="/js/vendor/qrcode-loader.js"></script>
   <script type="module" src="/js/main.js"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-/* ==========================================================================
+﻿/* ==========================================================================
    Shell, home menu and the tool views
      1. Viewport + view transitions   4. Tracker
      2. Home menu                     5. Auto-queue
@@ -419,6 +419,662 @@
   text-align: right;
 }
 
+/* Rank journey ---------------------------------------------------------- */
+
+.journey {
+  position: relative;
+}
+
+.journey svg {
+  display: block;
+  width: 100%;
+  height: 150px;
+}
+
+/* Bands carry their fill (and its dimness) as attributes -- see ui/chart.js,
+   the animation multiplies on top of the attribute opacity. */
+.journey-grid {
+  stroke: rgba(255, 255, 255, 0.06);
+}
+
+.journey-grid-label {
+  fill: var(--text-dim);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.journey-line {
+  fill: none;
+  stroke: var(--brand);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The parked state lives on a class so the line's resting state carries no
+   transition: removing the draw-in classes on a later repaint must snap
+   rather than animate, or every data change would replay the draw. */
+.journey-line.is-drawing {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+.journey-line.is-drawn {
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 700ms var(--ease-out);
+}
+
+.journey-point {
+  fill: var(--brand);
+  stroke: var(--bg-1);
+  stroke-width: 1.5;
+  pointer-events: none;
+  /* CSS transforms on SVG elements resolve against the canvas origin; the
+     pop-in animation scales from the dot's own centre instead. */
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.journey-point.is-current {
+  stroke: var(--text);
+  stroke-width: 2;
+}
+
+/* The transparent target: bigger than the dot it covers, and the `data-tip`
+   trigger the shared tooltip (js/ui/tooltip.js) picks up on hover or focus. */
+.journey-point-hit {
+  fill: transparent;
+  cursor: pointer;
+}
+
+/* Decoration drawn above the hit target: must never take the pointer, or the
+   current point's hover would land on the halo instead of its tooltip. */
+.journey-halo {
+  pointer-events: none;
+}
+
+/* Edge labels (first and last match dates). SVG text does not pick up the
+   page's `color`, so the fill has to be said explicitly -- and it borrows the
+   same secondary-text token as .match-when rather than inventing a shade. */
+.journey-x-label {
+  fill: var(--text-dim);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 560px) {
+  /* Narrow window: the axis and edge labels are the first to go. The bands,
+     line and dots still read on their own, and the tooltip keeps the detail. */
+  .journey-grid-label,
+  .journey-x-label {
+    display: none;
+  }
+}
+
+@media (forced-colors: active) {
+  /* The tier colours are decoration; high contrast drops them so the shapes
+     are never read off colour alone. The summary line and the match list
+     carry the same information as text. */
+  .journey-band {
+    display: none;
+  }
+}
+
+/* 4b. Map intelligence =================================================== */
+
+.map-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 10px;
+}
+
+.map-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 15px;
+  border-radius: 16px;
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.map-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.map-card-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.map-card-name.is-unknown {
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+.map-card-meta {
+  flex: none;
+  color: var(--text-dim);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.map-card-rate {
+  font-size: 1.7rem;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.map-card-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.map-card-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.map-card-row-label {
+  color: var(--text-dim);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.map-card-row-value {
+  font-size: 0.85rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.map-form {
+  display: flex;
+  gap: 4px;
+  margin-top: auto;
+}
+
+.map-form-chip {
+  display: grid;
+  place-items: center;
+  width: 19px;
+  height: 19px;
+  border-radius: 6px;
+  font-size: 0.68rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-dim);
+}
+
+.map-form-chip[data-result="win"] {
+  background: rgba(61, 220, 151, 0.13);
+  color: #3ddc97;
+}
+
+.map-form-chip[data-result="loss"] {
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+
+.compare {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.compare-row {
+  display: grid;
+  grid-template-columns: minmax(88px, 130px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.compare-name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.compare-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.compare-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.compare-bar-track {
+  position: relative;
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+
+/* Fills grow on paint the same way .rr-fill does; the width transition is
+   decoration only and the label carries the value. */
+.compare-bar-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--w, 0%);
+  border-radius: inherit;
+  background: #3ddc97;
+  transition: width 620ms var(--ease-out);
+}
+
+/* The avg RR bar sits around the track's centre: positive grows right from
+   the middle, negative grows left. */
+.compare-bar-fill.is-positive {
+  left: 50%;
+}
+
+.compare-bar-fill.is-negative {
+  right: 50%;
+  left: auto;
+  background: var(--bad);
+}
+
+.compare-bar-label {
+  flex: none;
+  width: 42px;
+  text-align: right;
+  color: var(--text-dim);
+  font-size: 0.72rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.compare-net {
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+@media (max-width: 560px) {
+  /* Narrow window: the net RR is already on every overview card, so the
+     comparison rows drop it rather than crowding the bars. */
+  .compare-row {
+    grid-template-columns: 84px minmax(0, 1fr);
+  }
+
+  .compare-net {
+    display: none;
+  }
+}
+
+/* 4b2. Agent intelligence ================================================ */
+
+/* The overview cards keep the maps language: one card per agent, the
+   portrait as the head, the winrate as the hero number, the sums below. */
+.agent-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 10px;
+}
+
+.agent-stats-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 15px;
+  border-radius: 16px;
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.agent-stats-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.agent-stats-card-art {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--hairline);
+}
+
+.agent-stats-card-portrait {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.agent-stats-card-monogram {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--text-dim);
+}
+
+.agent-stats-card-identity {
+  flex: 1;
+  min-width: 0;
+}
+
+.agent-stats-card-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.agent-stats-card-name.is-unknown {
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+/* The agent x map heatmap: agents down the side, maps across the top, each
+   cell carrying the match count, winrate and net RR. Tones follow the
+   compare-bar palette; thin cells (fewer than MIN_CELL_SAMPLE matches) are
+   dimmed and show "â€“" for the metrics. */
+.agent-map-scroll {
+  overflow-x: auto;
+}
+
+.agent-map {
+  border-collapse: separate;
+  border-spacing: 6px;
+  width: 100%;
+}
+
+.agent-map th,
+.agent-map td {
+  padding: 0;
+}
+
+.agent-map-map {
+  padding-bottom: 4px !important;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.agent-map-agent {
+  text-align: left;
+  white-space: nowrap;
+  padding-right: 8px;
+}
+
+.agent-map-mark {
+  display: inline-grid;
+  place-items: center;
+  vertical-align: middle;
+  width: 26px;
+  height: 26px;
+  margin-right: 7px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--hairline);
+}
+
+.agent-map-portrait {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.agent-map-monogram {
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--text-dim);
+}
+
+.agent-map-agent-name {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.agent-map-agent-name.is-unknown {
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+.agent-map-cell {
+  min-width: 104px;
+  padding: 8px 10px !important;
+  border-radius: 10px;
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.03);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.agent-map-cell.is-up {
+  background: rgba(61, 220, 151, 0.10);
+  border-color: rgba(61, 220, 151, 0.24);
+}
+
+.agent-map-cell.is-down {
+  background: rgba(255, 90, 104, 0.10);
+  border-color: rgba(255, 90, 104, 0.24);
+}
+
+.agent-map-cell.is-thin {
+  opacity: 0.55;
+}
+
+.agent-map-cell.is-empty {
+  border-style: dashed;
+  opacity: 0.35;
+}
+
+.agent-map-cell-played {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 750;
+}
+
+.agent-map-cell-rate {
+  color: var(--text-dim);
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+.agent-map-cell-net {
+  color: var(--text-dim);
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+@media (max-width: 560px) {
+  .agent-map-cell {
+    min-width: 88px;
+  }
+}
+
+/* 4c. Session analytics ================================================== */
+
+/* The headline block: net RR as the hero number, the derived stats beside
+   it. The stat cells reuse the tracker's session-grid language. */
+.session-hero {
+  display: grid;
+  grid-template-columns: minmax(150px, 240px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.session-hero-main {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 13px;
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.session-hero-label {
+  color: var(--text-dim);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.session-hero-rr {
+  font-size: 2.4rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.session-hero-meta {
+  color: var(--text-dim);
+  font-size: 0.78rem;
+}
+
+.session-hero-grid {
+  align-content: stretch;
+}
+
+.session-hero-grid .session-stat {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+@media (max-width: 640px) {
+  .session-hero {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Form chips reuse the maps view's result chips; the lines below them are
+   plain statements in the same tonal language. */
+.session-insights {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.session-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.session-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.session-line {
+  font-size: 0.88rem;
+  font-weight: 650;
+}
+
+.session-line.is-dim {
+  color: var(--text-dim);
+  font-weight: 500;
+  font-size: 0.8rem;
+}
+
+/* Compact per-map rows over the session's matches. */
+.session-maps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.session-map-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  gap: 14px;
+  align-items: center;
+  padding: 9px 12px;
+  border-radius: 11px;
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.025);
+  font-variant-numeric: tabular-nums;
+}
+
+.session-map-name {
+  font-weight: 650;
+  font-size: 0.88rem;
+  overflow-wrap: anywhere;
+}
+
+.session-map-name.is-unknown {
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+.session-map-played,
+.session-map-rate {
+  color: var(--text-dim);
+  font-size: 0.78rem;
+}
+
+.session-map-rate.is-up,
+.session-map-rate.is-down {
+  font-weight: 700;
+  font-size: 0.82rem;
+}
+
+.session-map-net {
+  font-weight: 700;
+  font-size: 0.88rem;
+  text-align: right;
+}
+
+.session-maps-link {
+  margin-top: 10px;
+}
+
+@media (max-width: 560px) {
+  .session-map-row {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .session-map-played {
+    display: none;
+  }
+}
+
 /* 5. Auto-queue ========================================================== */
 
 .toggle-row {
@@ -500,8 +1156,7 @@
 
 /* 6. Lobby intel ========================================================= */
 
-/* Both live in the tool header, so they share the pill treatment the header
-   buttons have rather than looking like loose text next to them. */
+/* Both live in the tool header, so they share the pill treatment the header   buttons have rather than looking like loose text next to them. */
 .intel-timer,
 .intel-count {
   padding: 5px 10px;
@@ -673,4 +1328,81 @@
   .lobby-tier {
     display: none;
   }
+}
+
+/* 7. LAN companion ======================================================= */
+
+.lan-loading {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+/* The state line under the toggle: the "Off / On" verdict, live. */
+.lan-state {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.lan-pair {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+/* The QR must scan: light card, dark modules, quiet zone from the library's
+   own margin argument -- the panel's dark glass would eat a dark-on-dark
+   code. */
+.lan-qr {
+  padding: 10px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid var(--hairline);
+  box-shadow: var(--shadow);
+}
+
+.lan-qr svg {
+  display: block;
+  width: 172px;
+  height: 172px;
+}
+
+.lan-url-box {
+  width: 100%;
+}
+
+.lan-url {
+  width: 100%;
+  padding: 9px 11px;
+  border-radius: 10px;
+  border: 1px solid var(--hairline);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  user-select: text;
+}
+
+.lan-hint {
+  color: var(--text-dim);
+  font-size: 0.72rem;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.lan-firewall {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lan-empty {
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px dashed var(--hairline-strong);
 }

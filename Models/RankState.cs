@@ -42,6 +42,16 @@ public sealed record SessionSummary(
 /// One competitive match. <c>Result</c> is derived from the sign of the RR
 /// change rather than from a scoreline -- the competitive-updates endpoint does
 /// not carry one, and RR direction is what a rank tracker is actually about.
+///
+/// <c>TierColorAfter</c> is the resolved tier colour rather than the numeric
+/// tier: the rank journey chart draws its tier bands from it, and letting the
+/// service resolve it means the frontend never invents a palette.
+///
+/// <c>AgentId</c> is the agent actually played in that match, resolved from the
+/// match-details endpoint (the player's <c>CharacterId</c> for this account).
+/// It is <c>null</c> until that enrichment lands -- a match without an agent is
+/// still a valid match -- and resolving the id into a name or portrait is a
+/// client-side asset concern.
 /// </summary>
 public sealed record TrackedMatch(
     string MatchId,
@@ -51,5 +61,7 @@ public sealed record TrackedMatch(
     int RrAfter,
     int TierAfter,
     string TierNameAfter,
-    string Result
+    string Result,
+    string? TierColorAfter,
+    string? AgentId = null
 );

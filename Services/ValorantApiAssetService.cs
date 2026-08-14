@@ -97,7 +97,11 @@ public sealed class ValorantApiAssetService(IHttpClientFactory httpClientFactory
                     agent.FullPortraitV2 ?? agent.FullPortrait ?? agent.BustPortrait ?? agent.DisplayIcon,
                     agent.Background,
                     agent.BackgroundGradientColors?.Where(color => !string.IsNullOrWhiteSpace(color)).ToArray() ?? [],
-                    agent.IsFullPortraitRightFacing),
+                    agent.IsFullPortraitRightFacing,
+                    // valorant-api's uuid is Riot's character id, the same one
+                    // match history reports; lowercased so lookups never fight
+                    // over casing (match-details already sends it lowercase).
+                    agent.Uuid?.ToLowerInvariant()),
                 StringComparer.OrdinalIgnoreCase);
 
         lock (_cacheLock)
@@ -209,6 +213,7 @@ public sealed class ValorantApiAssetService(IHttpClientFactory httpClientFactory
         [property: JsonPropertyName("data")] AgentApiAgent[]? Data);
 
     private sealed record AgentApiAgent(
+        [property: JsonPropertyName("uuid")] string? Uuid,
         [property: JsonPropertyName("displayName")] string? DisplayName,
         [property: JsonPropertyName("displayIcon")] string? DisplayIcon,
         [property: JsonPropertyName("bustPortrait")] string? BustPortrait,

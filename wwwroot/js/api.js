@@ -7,6 +7,15 @@ import { parseGradient, roleLabel, roleSlug } from "./roles.js";
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
+/**
+ * The LAN pairing token, when this page is the mobile companion. The desktop
+ * window navigates without ?k=, so this stays empty there and no request is
+ * altered -- the loopback exemption makes the token unnecessary locally. The
+ * mobile page carries ?k=TOKEN in its own URL and every request it makes
+ * inherits the token from there.
+ */
+const PAIRING_TOKEN = new URLSearchParams(window.location.search).get("k") ?? "";
+
 export class ApiError extends Error {
   constructor(message, status) {
     super(message);
@@ -169,6 +178,9 @@ function toAgent(raw) {
   return {
     name: raw.name,
     value: raw.value,
+    // Riot's character id, what match history reports as agentId. Lowercased
+    // so lookups never fight over casing; null for catalogues without one.
+    uuid: raw.uuid?.toLowerCase() ?? null,
     role: roleSlug(raw.role),
     roleLabel: roleLabel(raw.role),
     portrait: raw.portrait ?? null,
@@ -178,11 +190,21 @@ function toAgent(raw) {
   };
 }
 
+/**
+ * Appends the pairing token to a URL when this page is the mobile companion,
+ * and leaves the URL alone otherwise. The event stream shares this path: an
+ * EventSource carries no headers of its own, so its token has to ride in the
+ * query string like every other request's.
+ */
+export function withToken(url) {
+  return PAIRING_TOKEN === "" ? url : `${url}${url.includes("?") ? "&" : "?"}k=${PAIRING_TOKEN}`;
+}
+
 async function request(url, init) {
   let response;
 
   try {
-    response = await fetch(url, init);
+    response = await fetch(withToken(url), init);
   } catch {
     throw new ApiError("Cannot reach the local service.", 0);
   }

@@ -1699,6 +1699,10 @@ body[data-window="maximized"] .resize-top {
   color: var(--text);
   font-size: 0.78rem;
   line-height: 1.42;
+  /* `pre-line` lets a tip lay itself out in lines (the chart's match detail)
+     while single-line tips elsewhere are untouched: one space is still one
+     space, so nothing that already works changes. */
+  white-space: pre-line;
   /* Never intercept the pointer, or moving onto the bubble would hide it. */
   pointer-events: none;
   animation: tip-in 130ms var(--ease);
