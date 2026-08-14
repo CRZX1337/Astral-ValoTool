@@ -178,7 +178,7 @@ public sealed class InstalockerService : IModuleStateSource
     /// unknown names and repeats -- a chain that names the same agent twice would
     /// spend a retry re-attempting something that has already failed.
     /// </summary>
-    private static List<ValorantTables.Agent> ResolveChain(IReadOnlyList<string> agentNames)
+    internal static List<ValorantTables.Agent> ResolveChain(IReadOnlyList<string> agentNames)
     {
         List<ValorantTables.Agent> chain = [];
 
@@ -300,6 +300,7 @@ public sealed class InstalockerService : IModuleStateSource
         InstalockerOptions options = _optionsStore.Current.Instalocker;
         string mapName = ResolveMapName(match.MapId);
         List<ValorantTables.Agent> chain = BuildChainForMap(mapName, options);
+        string self = initiator.Client.UserId ?? string.Empty;
 
         if (seenMatches.Contains(match.Id))
         {
@@ -325,7 +326,7 @@ public sealed class InstalockerService : IModuleStateSource
             // being taken after the user has already asked to stop.
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (await TryTakeAsync(initiator, agent, options, cancellationToken).ConfigureAwait(false))
+            if (await TryTakeAsync(initiator, agent, options, self, cancellationToken).ConfigureAwait(false))
             {
                 seenMatches.Add(match.Id);
                 MarkLocked(generation, agentName, mapName);
@@ -359,6 +360,7 @@ public sealed class InstalockerService : IModuleStateSource
         Initiator initiator,
         ValorantTables.Agent agent,
         InstalockerOptions options,
+        string self,
         CancellationToken cancellationToken)
     {
         await initiator.Endpoints.PreGameEndpoints.SelectCharacterAsync(agent).ConfigureAwait(false);
@@ -371,18 +373,17 @@ public sealed class InstalockerService : IModuleStateSource
         cancellationToken.ThrowIfCancellationRequested();
         var locked = await initiator.Endpoints.PreGameEndpoints.LockCharacterAsync(agent).ConfigureAwait(false);
 
-        return HasLocked(locked, agent);
+        return HasLocked(locked, agent, self);
     }
 
     /// <summary>
     /// True when the match says this account is locked onto <paramref name="agent"/>.
     ///
-    /// The player is found by selection state rather than by puuid: pre-game
-    /// hides ally identities behind <c>Incognito</c>, but only one player on the
-    /// team can hold a given character, so a locked entry carrying that
-    /// character id is proof enough that the request went through.
+    /// The player is matched by its local subject identifier before checking the
+    /// character and selection state. Incognito does not hide the subject from
+    /// the local client, and another ally's lock must never count as ours.
     /// </summary>
-    private static bool HasLocked(PreGameMatch? match, ValorantTables.Agent agent)
+    internal static bool HasLocked(PreGameMatch? match, ValorantTables.Agent agent, string self)
     {
         if (match?.AllyTeam?.Players is not { } players || !AgentIds.TryGetValue(agent, out string? agentId))
         {
@@ -392,16 +393,23 @@ public sealed class InstalockerService : IModuleStateSource
             return false;
         }
 
-        foreach (Player player in players)
-        {
-            if (string.Equals(player.CharacterId, agentId, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(player.CharacterSelectionState, LockedSelectionState, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
+        Player? local = players.FirstOrDefault(player =>
+            string.Equals(player.Subject, self, StringComparison.OrdinalIgnoreCase));
 
-        return false;
+        return local is not null && IsLocalPlayerLocked(local.Subject, local.CharacterId, local.CharacterSelectionState, self, agentId);
+    }
+
+    internal static bool IsLocalPlayerLocked(
+        string? subject,
+        string? characterId,
+        string? selectionState,
+        string self,
+        string agentId)
+    {
+        return !string.IsNullOrWhiteSpace(self) &&
+               string.Equals(subject, self, StringComparison.OrdinalIgnoreCase) &&
+               string.Equals(characterId, agentId, StringComparison.OrdinalIgnoreCase) &&
+               string.Equals(selectionState, LockedSelectionState, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string AttemptStatus(string agentName, string mapName, int index, int total)
@@ -429,7 +437,7 @@ public sealed class InstalockerService : IModuleStateSource
     /// what makes an override recoverable: the fallbacks still apply when
     /// somebody else has the overridden agent.
     /// </summary>
-    private List<ValorantTables.Agent> BuildChainForMap(string mapName, InstalockerOptions options)
+    internal List<ValorantTables.Agent> BuildChainForMap(string mapName, InstalockerOptions options)
     {
         List<ValorantTables.Agent> chain = GetSelectedAgents();
 

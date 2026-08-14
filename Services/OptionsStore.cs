@@ -24,11 +24,24 @@ public sealed class OptionsStore
         IOptions<InstalockerOptions> instalockerDefaults,
         IOptions<AutoQueueOptions> autoQueueDefaults,
         IOptions<UpdateOptions> updateDefaults)
+        : this(
+            instalockerDefaults,
+            autoQueueDefaults,
+            updateDefaults,
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Astral",
+                "settings.json"))
     {
-        _path = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "Astral",
-            "settings.json");
+    }
+
+    internal OptionsStore(
+        IOptions<InstalockerOptions> instalockerDefaults,
+        IOptions<AutoQueueOptions> autoQueueDefaults,
+        IOptions<UpdateOptions> updateDefaults,
+        string path)
+    {
+        _path = path;
 
         AstralSettings defaults = new()
         {
@@ -52,11 +65,20 @@ public sealed class OptionsStore
     /// write throws after the change is already live, so the caller can report
     /// "applied but not saved" rather than silently losing either half.
     /// </summary>
-    public async Task ApplyAsync(AstralSettings next, CancellationToken cancellationToken = default)
+    private async Task ApplyAsync(Func<AstralSettings, AstralSettings> change, CancellationToken cancellationToken = default)
     {
-        AstralSettings normalized = Normalize(next);
-        Volatile.Write(ref _current, normalized);
-        await SaveAsync(normalized, cancellationToken).ConfigureAwait(false);
+        await _writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            AstralSettings normalized = Normalize(change(Current));
+            Volatile.Write(ref _current, normalized);
+            await SaveAsync(normalized, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _writeLock.Release();
+        }
     }
 
     /// <summary>Replaces one section and leaves the rest of the file alone.</summary>
@@ -64,81 +86,64 @@ public sealed class OptionsStore
     {
         AstralSettings current = Current;
 
-        return ApplyAsync(
-            new AstralSettings
+        return ApplyAsync(current => new AstralSettings
             {
                 Instalocker = next,
                 AutoQueue = current.AutoQueue,
                 Tracker = current.Tracker,
                 Update = current.Update
-            },
-            cancellationToken);
+            }, cancellationToken);
     }
 
     public Task ApplyAutoQueueAsync(AutoQueueOptions next, CancellationToken cancellationToken = default)
     {
         AstralSettings current = Current;
 
-        return ApplyAsync(
-            new AstralSettings
+        return ApplyAsync(current => new AstralSettings
             {
                 Instalocker = current.Instalocker,
                 AutoQueue = next,
                 Tracker = current.Tracker,
                 Update = current.Update
-            },
-            cancellationToken);
+            }, cancellationToken);
     }
 
     public Task ApplyTrackerAsync(TrackerOptions next, CancellationToken cancellationToken = default)
     {
         AstralSettings current = Current;
 
-        return ApplyAsync(
-            new AstralSettings
+        return ApplyAsync(current => new AstralSettings
             {
                 Instalocker = current.Instalocker,
                 AutoQueue = current.AutoQueue,
                 Tracker = next,
                 Update = current.Update
-            },
-            cancellationToken);
+            }, cancellationToken);
     }
 
     public Task ApplyUpdateAsync(UpdateOptions next, CancellationToken cancellationToken = default)
     {
         AstralSettings current = Current;
 
-        return ApplyAsync(
-            new AstralSettings
+        return ApplyAsync(current => new AstralSettings
             {
                 Instalocker = current.Instalocker,
                 AutoQueue = current.AutoQueue,
                 Tracker = current.Tracker,
                 Update = next
-            },
-            cancellationToken);
+            }, cancellationToken);
     }
 
     private async Task SaveAsync(AstralSettings settings, CancellationToken cancellationToken)
     {
-        await _writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
 
-        try
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-
-            // Write beside the target and swap it in: a crash mid-write must not
-            // leave a truncated settings file that fails to parse next start.
-            string temporary = _path + ".tmp";
-            await File.WriteAllTextAsync(temporary, JsonSerializer.Serialize(settings, JsonOptions), cancellationToken)
-                .ConfigureAwait(false);
-            File.Move(temporary, _path, overwrite: true);
-        }
-        finally
-        {
-            _writeLock.Release();
-        }
+        // Write beside the target and swap it in: a crash mid-write must not
+        // leave a truncated settings file that fails to parse next start.
+        string temporary = _path + ".tmp";
+        await File.WriteAllTextAsync(temporary, JsonSerializer.Serialize(settings, JsonOptions), cancellationToken)
+            .ConfigureAwait(false);
+        File.Move(temporary, _path, overwrite: true);
     }
 
     private static AstralSettings Load(AstralSettings defaults, string path)
@@ -228,6 +233,10 @@ public sealed class OptionsStore
                     : update.Repository.Trim().Trim('/'),
                 CheckOnStartup = update.CheckOnStartup,
                 IncludePrereleases = update.IncludePrereleases,
+                RequireAuthenticodeSignature = update.RequireAuthenticodeSignature,
+                RequiredSignerSubject = string.IsNullOrWhiteSpace(update.RequiredSignerSubject)
+                    ? null
+                    : update.RequiredSignerSubject.Trim(),
                 SkippedVersion = string.IsNullOrWhiteSpace(update.SkippedVersion)
                     ? null
                     : update.SkippedVersion.Trim()

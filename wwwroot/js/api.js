@@ -160,7 +160,7 @@ export function patchOptions(patch) {
 }
 
 /**
- * `/api/agent-assets` reaches out to valorant-api.com and throws a 500 when
+ * `/api/agent-assets` reaches out to valorant-api.com and throws a 503 when
  * that call fails (ValorantApiAssetService.cs). `/api/agents` is purely local,
  * so it is the offline fallback -- names only, no portraits.
  */

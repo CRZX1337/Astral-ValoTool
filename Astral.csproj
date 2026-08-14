@@ -54,10 +54,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Astral.Tests" />
     <Compile Remove="_upstream_instalocker\**" />
     <Compile Remove="_upstream_radiantconnect\**" />
+    <Compile Remove="Astral.Tests\**" />
     <Content Remove="_upstream_instalocker\**" />
     <Content Remove="_upstream_radiantconnect\**" />
+    <Content Remove="Astral.Tests\**" />
     <Content Remove="wwwroot\**\*" />
     <!-- The GitHub Pages site. The Web SDK's default globs would otherwise
          sweep its files into the published app. -->
@@ -65,8 +68,10 @@
     <None Remove="docs\**" />
     <EmbeddedResource Remove="_upstream_instalocker\**" />
     <EmbeddedResource Remove="_upstream_radiantconnect\**" />
+    <EmbeddedResource Remove="Astral.Tests\**" />
     <None Remove="_upstream_instalocker\**" />
     <None Remove="_upstream_radiantconnect\**" />
+    <None Remove="Astral.Tests\**" />
   </ItemGroup>
 
   <ItemGroup>

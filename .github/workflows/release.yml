@@ -1,0 +1,119 @@
+name: Release Astral
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore Astral.sln
+
+      - name: Build
+        run: dotnet build Astral.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test Astral.sln -c Release --no-build --no-restore
+
+      - name: Validate signing configuration
+        shell: pwsh
+        env:
+          ASTRAL_SIGNING_CERTIFICATE: ${{ secrets.ASTRAL_SIGNING_CERTIFICATE }}
+          ASTRAL_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.ASTRAL_SIGNING_CERTIFICATE_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:ASTRAL_SIGNING_CERTIFICATE) -or
+              [string]::IsNullOrWhiteSpace($env:ASTRAL_SIGNING_CERTIFICATE_PASSWORD)) {
+            throw "Release signing is not configured. Set ASTRAL_SIGNING_CERTIFICATE and ASTRAL_SIGNING_CERTIFICATE_PASSWORD before creating a tag release."
+          }
+
+      - name: Publish
+        run: dotnet publish Astral.csproj -p:PublishProfile=SingleFile --no-restore
+
+      - name: Import signing certificate
+        shell: pwsh
+        env:
+          ASTRAL_SIGNING_CERTIFICATE: ${{ secrets.ASTRAL_SIGNING_CERTIFICATE }}
+          ASTRAL_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.ASTRAL_SIGNING_CERTIFICATE_PASSWORD }}
+        run: |
+          $certificatePath = Join-Path $env:RUNNER_TEMP "astral-signing.pfx"
+          [Convert]::FromBase64String($env:ASTRAL_SIGNING_CERTIFICATE) | Set-Content -Path $certificatePath -AsByteStream
+          $certificate = Import-PfxCertificate -FilePath $certificatePath -CertStoreLocation Cert:\CurrentUser\My -Password (ConvertTo-SecureString $env:ASTRAL_SIGNING_CERTIFICATE_PASSWORD -AsPlainText -Force)
+          if ($null -eq $certificate) { throw "The configured signing certificate could not be imported." }
+          "ASTRAL_SIGNING_THUMBPRINT=$($certificate.Thumbprint)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "CERTIFICATE_PATH=$certificatePath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Sign executable
+        shell: pwsh
+        env:
+          ASTRAL_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.ASTRAL_SIGNING_CERTIFICATE_PASSWORD }}
+        run: |
+          $executable = Join-Path $pwd "bin\Publish\SingleFile\Astral.exe"
+          if (-not (Test-Path $executable)) { throw "Publish did not produce Astral.exe." }
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter signtool.exe -Recurse | Sort-Object FullName -Descending | Select-Object -First 1
+          if ($null -eq $signtool) { throw "signtool.exe was not found on the release runner." }
+          & $signtool.FullName sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /sha1 $env:ASTRAL_SIGNING_THUMBPRINT $executable
+          if ($LASTEXITCODE -ne 0) { throw "Authenticode signing failed." }
+          $signature = Get-AuthenticodeSignature $executable
+          if ($signature.Status -ne "Valid") { throw "The published executable is not Authenticode-valid after signing: $($signature.Status)." }
+
+      - name: Generate checksum
+        shell: pwsh
+        run: |
+          $executable = Join-Path $pwd "bin\Publish\SingleFile\Astral.exe"
+          $hash = (Get-FileHash -Algorithm SHA256 $executable).Hash.ToLowerInvariant()
+          "$hash  Astral.exe" | Set-Content -Path (Join-Path $pwd "bin\Publish\SingleFile\Astral.exe.sha256") -NoNewline
+
+      - name: Validate tag version
+        shell: pwsh
+        run: |
+          [xml]$project = Get-Content Astral.csproj
+          $projectVersion = ($project.Project.PropertyGroup.Version | Select-Object -First 1).Trim()
+          $tagVersion = "${{ github.ref_name }}".TrimStart('v')
+          if ($projectVersion -ne $tagVersion) { throw "Tag $tagVersion does not match Astral.csproj version $projectVersion." }
+
+      - name: Publish smoke test
+        shell: pwsh
+        run: |
+          $executable = Join-Path $pwd "bin\Publish\SingleFile\Astral.exe"
+          $stdout = Join-Path $env:RUNNER_TEMP "astral.stdout.log"
+          $stderr = Join-Path $env:RUNNER_TEMP "astral.stderr.log"
+          $process = Start-Process -FilePath $executable -ArgumentList "--no-window" -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+          try {
+            $port = $null
+            for ($i = 0; $i -lt 30 -and $null -eq $port; $i++) {
+              Start-Sleep -Seconds 1
+              if (Test-Path $stdout) {
+                $match = Select-String -Path $stdout -Pattern "Now listening on: http://0.0.0.0:(\d+)" | Select-Object -Last 1
+                if ($match) { $port = $match.Matches[0].Groups[1].Value }
+              }
+            }
+            if ($null -eq $port) { throw "Published application did not announce a listening port.`n$(Get-Content $stdout -Raw -ErrorAction SilentlyContinue)`n$(Get-Content $stderr -Raw -ErrorAction SilentlyContinue)" }
+            if ((Invoke-WebRequest "http://127.0.0.1:$port/api/state").StatusCode -ne 200) { throw "API smoke test failed." }
+            if ((Invoke-WebRequest "http://127.0.0.1:$port/mobile.html").StatusCode -ne 200) { throw "Mobile page smoke test failed." }
+            foreach ($module in @("instalock.js", "more.js", "router.js", "session.js")) {
+              if ((Invoke-WebRequest "http://127.0.0.1:$port/js/mobile/$module").StatusCode -ne 200) { throw "Mobile module smoke test failed: $module" }
+            }
+          }
+          finally {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: gh release create "${{ github.ref_name }}" "bin\Publish\SingleFile\Astral.exe" "bin\Publish\SingleFile\Astral.exe.sha256" --title "Astral ${{ github.ref_name }}" --generate-notes

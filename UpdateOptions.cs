@@ -20,6 +20,12 @@ public sealed class UpdateOptions
     /// <summary>Whether pre-releases count as updates. Off: only full releases.</summary>
     public bool IncludePrereleases { get; set; }
 
+    /// <summary>Reject downloaded executables without a valid Authenticode signature.</summary>
+    public bool RequireAuthenticodeSignature { get; set; } = true;
+
+    /// <summary>Optional exact certificate subject to require after signature validation.</summary>
+    public string? RequiredSignerSubject { get; set; }
+
     /// <summary>
     /// A version the user dismissed. Suppresses the banner for that release only
     /// -- the next one is announced normally, so dismissing once does not opt out

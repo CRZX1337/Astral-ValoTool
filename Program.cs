@@ -516,8 +516,7 @@ internal static class Program
         HttpRequest request = context.HttpContext.Request;
         string? origin = request.Headers.Origin;
 
-        if (!string.IsNullOrEmpty(origin) &&
-            !string.Equals(origin, $"{request.Scheme}://{request.Host}", StringComparison.OrdinalIgnoreCase))
+        if (IsForeignOrigin(origin, request.Scheme, request.Host.ToString()))
         {
             return TypedResults.Json(
                 new ErrorResponse("Cross-origin requests are not accepted."),
@@ -534,7 +533,13 @@ internal static class Program
     /// scripts, or the <c>astral_pair</c> cookie. Compared in constant time so
     /// a LAN snoop cannot learn the token a byte at a time.
     /// </summary>
-    private static bool IsPaired(HttpRequest request, string token)
+    internal static bool IsForeignOrigin(string? origin, string scheme, string host)
+    {
+        return !string.IsNullOrEmpty(origin) &&
+               !string.Equals(origin, $"{scheme}://{host}", StringComparison.OrdinalIgnoreCase);
+    }
+
+    internal static bool IsPaired(HttpRequest request, string token)
     {
         string? supplied =
             request.Query["k"].FirstOrDefault() ??

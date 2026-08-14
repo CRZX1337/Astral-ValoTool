@@ -41,10 +41,11 @@ public sealed class UpdateService : IModuleStateSource, IDisposable
     private UpdateState _state;
 
     /// <summary>The asset picked out of the newest release, if it has one.</summary>
-    private ReleaseAsset? _asset;
+    private ReleaseDownload? _asset;
 
     /// <summary>Where a completed download landed, ready to be swapped in.</summary>
     private string? _staged;
+    private byte[]? _expectedHash;
 
     private Task? _inFlight;
     private CancellationTokenSource? _download;
@@ -303,12 +304,13 @@ public sealed class UpdateService : IModuleStateSource, IDisposable
                        !string.IsNullOrWhiteSpace(options.SkippedVersion) &&
                        string.Equals(options.SkippedVersion, display, StringComparison.OrdinalIgnoreCase);
 
-        ReleaseAsset? asset = newer ? PickAsset(release) : null;
+        ReleaseDownload? asset = newer ? PickAsset(release) : null;
 
         lock (_sync)
         {
             _asset = asset;
             _staged = null;
+            _expectedHash = null;
         }
 
         Mutate(state => state with
@@ -319,7 +321,7 @@ public sealed class UpdateService : IModuleStateSource, IDisposable
             ReleaseName = release.Name,
             ReleaseNotes = Summarize(release.Body),
             ReleaseUrl = release.HtmlUrl,
-            DownloadSize = asset?.Size,
+            DownloadSize = asset?.Executable.Size,
             DownloadedBytes = 0,
             PublishedAt = release.PublishedAt,
             IsPrerelease = release.Prerelease,
@@ -329,7 +331,7 @@ public sealed class UpdateService : IModuleStateSource, IDisposable
         });
     }
 
-    private string DescribeAvailability(bool newer, bool skipped, string display, ReleaseAsset? asset)
+    private string DescribeAvailability(bool newer, bool skipped, string display, ReleaseDownload? asset)
     {
         if (!newer)
         {
@@ -400,16 +402,18 @@ public sealed class UpdateService : IModuleStateSource, IDisposable
     /// so a bare .exe is preferred; a .zip is accepted as a fallback but cannot
     /// be applied in place, and the UI sends the user to the release page for it.
     /// </summary>
-    private static ReleaseAsset? PickAsset(Release release)
+    internal static ReleaseDownload? PickAsset(Release release)
     {
         ReleaseAsset[] assets = release.Assets ?? [];
 
-        return assets.FirstOrDefault(asset => Has(asset, ".exe"))
-               ?? assets.FirstOrDefault(asset => Has(asset, ".zip"));
+        ReleaseAsset? executable = assets.FirstOrDefault(asset =>
+            string.Equals(asset.Name, "Astral.exe", StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(asset.BrowserDownloadUrl));
+        ReleaseAsset? checksum = assets.FirstOrDefault(asset =>
+            string.Equals(asset.Name, "Astral.exe.sha256", StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(asset.BrowserDownloadUrl));
 
-        static bool Has(ReleaseAsset asset, string extension) =>
-            asset.Name?.EndsWith(extension, StringComparison.OrdinalIgnoreCase) == true &&
-            !string.IsNullOrWhiteSpace(asset.BrowserDownloadUrl);
+        return executable is null || checksum is null ? null : new ReleaseDownload(executable, checksum);
     }
 
     /// <summary>
@@ -459,7 +463,7 @@ public sealed class UpdateService : IModuleStateSource, IDisposable
     /// </summary>
     public async Task DownloadAsync(CancellationToken cancellationToken = default)
     {
-        ReleaseAsset? asset;
+        ReleaseDownload? asset;
 
         lock (_sync)
         {
@@ -490,11 +494,26 @@ public sealed class UpdateService : IModuleStateSource, IDisposable
 
         try
         {
-            string path = await FetchAssetAsync(asset!, token).ConfigureAwait(false);
+            string path = await FetchAssetAsync(asset!.Executable, token).ConfigureAwait(false);
+            byte[] expectedHash = await FetchAndParseChecksumAsync(asset.Checksum, token).ConfigureAwait(false);
+
+            if (!await UpdateVerification.MatchesSha256Async(path, expectedHash, token).ConfigureAwait(false))
+            {
+                throw new InvalidDataException("The downloaded Astral.exe does not match Astral.exe.sha256.");
+            }
+
+            UpdateOptions options = _optionsStore.Current.Update;
+
+            if (options.RequireAuthenticodeSignature &&
+                !UpdateVerification.HasValidAuthenticode(path, options.RequiredSignerSubject))
+            {
+                throw new InvalidDataException("The downloaded Astral.exe does not have a valid Authenticode signature.");
+            }
 
             lock (_sync)
             {
                 _staged = path;
+                _expectedHash = expectedHash;
             }
 
             bool installable = path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
@@ -510,6 +529,13 @@ public sealed class UpdateService : IModuleStateSource, IDisposable
         }
         catch (OperationCanceledException)
         {
+            lock (_sync)
+            {
+                DeleteStagedFile(_staged ?? Path.Combine(StagingFolder, SafeName(asset?.Executable.Name)));
+                _staged = null;
+                _expectedHash = null;
+            }
+
             Mutate(state => state with
             {
                 Stage = UpdateStage.Available,
@@ -520,6 +546,13 @@ public sealed class UpdateService : IModuleStateSource, IDisposable
         }
         catch (Exception ex)
         {
+            lock (_sync)
+            {
+                DeleteStagedFile(_staged ?? Path.Combine(StagingFolder, SafeName(asset?.Executable.Name)));
+                _staged = null;
+                _expectedHash = null;
+            }
+
             Mutate(state => state with
             {
                 Stage = UpdateStage.Failed,
@@ -589,6 +622,44 @@ public sealed class UpdateService : IModuleStateSource, IDisposable
         return target;
     }
 
+    private async Task<byte[]> FetchAndParseChecksumAsync(ReleaseAsset asset, CancellationToken cancellationToken)
+    {
+        using HttpClient client = CreateClient();
+        using HttpResponseMessage response = await client
+            .GetAsync(asset.BrowserDownloadUrl, cancellationToken)
+            .ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+
+        string text = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+        if (!UpdateVerification.TryParseSha256(text, out byte[] hash))
+        {
+            throw new InvalidDataException("Astral.exe.sha256 does not contain a valid SHA-256 hash.");
+        }
+
+        return hash;
+    }
+
+    private static void DeleteStagedFile(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        try
+        {
+            File.Delete(path);
+            File.Delete(path + ".part");
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+    }
+
     /// <summary>Keeps a release's own filename but refuses anything path-like.</summary>
     private static string SafeName(string? name)
     {
@@ -618,6 +689,7 @@ public sealed class UpdateService : IModuleStateSource, IDisposable
     public bool Apply()
     {
         string? staged;
+        byte[]? expectedHash;
 
         lock (_sync)
         {
@@ -627,12 +699,14 @@ public sealed class UpdateService : IModuleStateSource, IDisposable
             }
 
             staged = _staged;
+            expectedHash = _expectedHash;
         }
 
         string? running = Environment.ProcessPath;
 
         if (string.IsNullOrWhiteSpace(running) ||
-            !staged.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+            expectedHash is null ||
+            !staged.EndsWith("Astral.exe", StringComparison.OrdinalIgnoreCase))
         {
             Mutate(state => state with
             {
@@ -647,6 +721,15 @@ public sealed class UpdateService : IModuleStateSource, IDisposable
 
         try
         {
+            UpdateOptions options = _optionsStore.Current.Update;
+
+            if (!UpdateVerification.MatchesSha256(staged, expectedHash) ||
+                (options.RequireAuthenticodeSignature &&
+                 !UpdateVerification.HasValidAuthenticode(staged, options.RequiredSignerSubject)))
+            {
+                throw new InvalidDataException("The staged Astral.exe failed integrity or Authenticode verification.");
+            }
+
             if (File.Exists(backup))
             {
                 File.Delete(backup);
@@ -716,6 +799,8 @@ public sealed class UpdateService : IModuleStateSource, IDisposable
                 Repository = current.Repository,
                 CheckOnStartup = current.CheckOnStartup,
                 IncludePrereleases = current.IncludePrereleases,
+                RequireAuthenticodeSignature = current.RequireAuthenticodeSignature,
+                RequiredSignerSubject = current.RequiredSignerSubject,
                 SkippedVersion = Normalize(target)
             },
             cancellationToken).ConfigureAwait(false);
@@ -759,7 +844,7 @@ public sealed class UpdateService : IModuleStateSource, IDisposable
 
     // --- GitHub's release payload, only the fields that are actually used -----
 
-    private sealed record Release
+    internal sealed record Release
     {
         [JsonPropertyName("tag_name")]
         public string? TagName { get; init; }
@@ -781,7 +866,7 @@ public sealed class UpdateService : IModuleStateSource, IDisposable
         public ReleaseAsset[]? Assets { get; init; }
     }
 
-    private sealed record ReleaseAsset
+    internal sealed record ReleaseAsset
     {
         public string? Name { get; init; }
 
@@ -790,4 +875,6 @@ public sealed class UpdateService : IModuleStateSource, IDisposable
         [JsonPropertyName("browser_download_url")]
         public string? BrowserDownloadUrl { get; init; }
     }
+
+    internal sealed record ReleaseDownload(ReleaseAsset Executable, ReleaseAsset Checksum);
 }
